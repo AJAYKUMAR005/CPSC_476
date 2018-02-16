@@ -1,5 +1,6 @@
 import minitwit
-from flask import Flask, request, jsonify, g
+import time
+from flask import Flask, request, jsonify, g, json
 
 app = Flask(__name__)
 
@@ -31,6 +32,38 @@ def user_timeline(user_id):
     messages = map(dict, messages)
     print messages
     return jsonify(messages)
+
+@app.route('/users/<username>', methods=['GET'])
+def user_info(username):
+    """Gets user's information""""
+    if request.method == 'GET':
+        user = minitwit.query_db('''
+        select * from user
+        where user.username = ?''',
+        [username])
+        print user
+        user = map(dict, user)
+    return jsonify(user)
+
+@app.route('/users/<user_id>/add_message', methods=['POST'])
+def add_message(user_id):
+    """Inserts a new message from current <user_id>"""
+    print (request.is_json)
+    data = request.get_json()
+    print data
+    if data:
+        db = minitwit.get_db()
+        db.execute('''insert into message (author_id, text, pub_date)
+        values (?, ?, ?)''', [data["author_id"], data["text"], int(time.time())])
+        db.commit()
+    return jsonify(data)
+
+@app.route('/users/<username>/', methods=['GET'])
+def user_timeline(username):
+    """Displays a user's tweets"""
+    profile_user = query_db('select * from user where username = ?',
+                            [username], one=True)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

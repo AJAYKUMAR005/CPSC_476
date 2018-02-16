@@ -121,7 +121,6 @@ def timeline():
     """
     if not g.user:
         return redirect(url_for('public_timeline'))
-    mt_api.to_json()
     return render_template('timeline.html', messages=query_db('''
         select message.*, user.* from message, user
         where message.author_id = user.user_id and (
