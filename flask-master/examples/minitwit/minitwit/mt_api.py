@@ -1,12 +1,13 @@
 import minitwit
 import time
-from flask import Flask, request, jsonify, g, json, abort
+from flask import Flask, request, jsonify, g, json, abort, Response
 from flask_basicauth import BasicAuth
 
 app = Flask(__name__)
 
-# app.config['BASIC_AUTH_USERNAME'] = 'john'
-# app.config['BASIC_AUTH_PASSWORD'] = 'matrix'
+# default authenticated configuration
+app.config['BASIC_AUTH_USERNAME'] = 'thomas'
+app.config['BASIC_AUTH_PASSWORD'] = 'me123'
 
 basic_auth = BasicAuth(app)
 
@@ -53,51 +54,71 @@ def user_timeline(user_id):
     print messages
     return jsonify(messages)
 
-@app.route('/users/<username>', methods=['GET'])
+@app.route('/users/<username>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def user_info(username):
     """Gets user's information"""
-    if request.method == 'GET':
-        user = minitwit.query_db('''
-        select * from user
-        where user.username = ?''',
-        [username])
-        print user
-        user = map(dict, user)
-    return jsonify(user)
-
-@app.route('/users/<username>/add_message', methods=['POST'])
-def add_message(username):
-    """Inserts a new message from current <user_id>"""
     data = request.get_json()
-    user_id = minitwit.get_user_id(username)
     get_credentials(username)
-    print basic_auth.check_credentials(data["username"], data["pw_hash"])
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    if data:
-        db = minitwit.get_db()
-        db.execute('''insert into message (author_id, text, pub_date)
-        values (?, ?, ?)''', [user_id, data["text"], int(time.time())])
-        db.commit()
-    return jsonify(data)
+    if request.method == 'GET':
+        user = minitwit.query_db('''select * from user where user.username = ?''', [username])
+        print user
+        user = map(dict, user)
+        return jsonify(user)
+    return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
-@app.route('/users/<username>/messages', methods=['GET'])
+@app.route('/users/<username>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
+def add_message(username):
+    """Inserts a new message from current <user_id>"""
+    if request.method == 'POST':
+        data = request.get_json()
+        user_id = minitwit.get_user_id(username)
+        get_credentials(username)
+        if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+            return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+        if data:
+            db = minitwit.get_db()
+            db.execute('''insert into message (author_id, text, pub_date)
+            values (?, ?, ?)''', [user_id, data["text"], int(time.time())])
+            db.commit()
+        return jsonify(data)
+    return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+
+@app.route('/users/<username>/messages', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def get_user_messages(username):
     """Displays a user's tweets"""
     profile_user = minitwit.query_db('select * from user where username = ?',[username], one=True)
-    print profile_user
     if profile_user is None:
-        return make_error(404, 'Not Found', 'The requested resource could not be found.')
-    followed = False
-    messages = minitwit.query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
-    [profile_user['user_id'], minitwit.PER_PAGE])
-    messages = map(dict, messages)
-    return jsonify(messages)
+        return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+    data = request.get_json()
+    get_credentials(username)
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if request.method == 'GET':
+        messages = minitwit.query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
+        [profile_user['user_id'], minitwit.PER_PAGE])
+        messages = map(dict, messages)
+        return jsonify(messages)
+    return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
-# @app.route('/users/<username>/follow', methods=['POST'])
-# def add_follow_user(username):
-#     data = request.get_json()
-#     if
+@app.route('/users/<username1>/follow/<username2>', methods=['POST', 'GET', 'PUT', 'DELETE'])
+def add_follow_user(username1, username2):
+    """Adds the username1 as follower of the given username2."""
+    data = request.get_json()
+    get_credentials(username1)
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    who_id = minitwit.get_user_id(username1)
+    whom_id = minitwit.get_user_id(username2)
+    if whom_id is None:
+        return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+    if request.method == 'POST':
+        db = minitwit.get_db()
+        db.execute('insert into follower (who_id, whom_id) values (?, ?)', [who_id, whom_id])
+        db.commit()
+        return jsonify(data)
+    return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
 
 if __name__ == '__main__':
