@@ -1,13 +1,14 @@
 import minitwit
 import time
-from flask import Flask, request, jsonify, g, json, abort, Response
+from flask import Flask, request, jsonify, g, json, abort, Response, flash
 from flask_basicauth import BasicAuth
+from werkzeug import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 
 # default authenticated configuration
-app.config['BASIC_AUTH_USERNAME'] = 'thomas'
-app.config['BASIC_AUTH_PASSWORD'] = 'me123'
+app.config['BASIC_AUTH_USERNAME'] = 'admin'
+app.config['BASIC_AUTH_PASSWORD'] = 'admin123'
 
 basic_auth = BasicAuth(app)
 
@@ -65,29 +66,34 @@ def after_request(response):
         return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
     if response.status_code == 500:
         return make_error(500, "Internal Server Error", "The server encountered an internal error and was unable to complete your request.  Either the server is overloaded or there is an error in the application.")
+    if response.status_code == 404:
+        return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+    if response.status_code == 405:
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+    return response
 
 
-@app.route('/users/<user_id>/timeline')
-def user_timeline(user_id):
-    messages = minitwit.query_db('''
-        select message.*, user.* from message, user
-        where message.author_id = user.user_id and (
-            user.user_id = ? or
-            user.user_id in (select whom_id from follower
-                                    where who_id = ?))
-        order by message.pub_date desc limit ?''',
-        [user_id, user_id, minitwit.PER_PAGE])
-    print messages
-    messages = map(dict, messages)
-    print messages
-    return jsonify(messages)
+# @app.route('/users/<user_id>/timeline')
+# def user_timeline(user_id):
+#     messages = minitwit.query_db('''
+#         select message.*, user.* from message, user
+#         where message.author_id = user.user_id and (
+#             user.user_id = ? or
+#             user.user_id in (select whom_id from follower
+#                                     where who_id = ?))
+#         order by message.pub_date desc limit ?''',
+#         [user_id, user_id, minitwit.PER_PAGE])
+#     print messages
+#     messages = map(dict, messages)
+#     print messages
+#     return jsonify(messages)
 
 
 @app.route('/users/<username>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def user_info(username):
     """Gets user's information"""
     data = request.get_json()
-    get_credentials(username)
+    get_credentials(data["username"])
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
@@ -104,7 +110,7 @@ def insert_message(username):
     if request.method == 'POST':
         data = request.get_json()
         user_id = minitwit.get_user_id(username)
-        get_credentials(username)
+        get_credentials(data["username"])
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
@@ -123,7 +129,7 @@ def get_user_messages(username):
     if profile_user is None:
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     data = request.get_json()
-    get_credentials(username)
+    get_credentials(data["username"])
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
@@ -147,7 +153,7 @@ def add_follow_user(username1, username2):
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     cur = minitwit.query_db('select count(*) from follower where who_id = ? and whom_id = ?', [who_id, whom_id], one=True)
     if cur[0] > 0:
-        return make_error(400, "Bad Request", "Data duplicated")
+        return make_error(422, "Unprocessable Entity", "Data duplicated")
     if request.method == 'POST':
         db = minitwit.get_db()
         db.execute('insert into follower (who_id, whom_id) values (?, ?)', [who_id, whom_id])
@@ -178,7 +184,10 @@ def get_message_user(user_id):
     '''return all messages form the user <user_id>'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
+    data = request.json
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     messages = minitwit.query_db('''
         select message.text, user.username from message, user
         where message.author_id = user.user_id and user.user_id = ? ''',
@@ -194,7 +203,10 @@ def user_followers(user_id):
     '''return all users that are followers of the user <user_id>'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
+    data = request.json
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     messages = minitwit.query_db('''
         select u1.username as followee, u2.username as follower from user u1, follower f, user u2
         where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
@@ -210,7 +222,10 @@ def user_follow(user_id):
     '''return all users that the user <user_id> is following'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
+    data = request.json
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     messages = minitwit.query_db('''
         select u1.username as followee, u2.username as follower from user u1, follower f, user u2
         where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
@@ -230,7 +245,9 @@ def add_message(user_id):
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
     data = request.json
-
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
         username = get_username(user_id)
         get_credentials(username)
@@ -241,6 +258,116 @@ def add_message(user_id):
         db.execute('''insert into message (author_id, text)
         values (?, ?)''',
         [data["author_id"], data["text"]])
+        db.commit()
+    return jsonify(data)
+
+
+@app.route('/users/<user_id>/add_follow', methods = ['POST', 'GET', 'PUT', 'DELETE'])
+def add_follow(user_id):
+    '''Insert follow: json data: whom_id'''
+    if not request.json:
+        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    if request.method != 'POST':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+
+    data = request.json
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if data:
+        '''Check duplicate'''
+        cur = minitwit.query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
+        if cur[0] > 0:
+            return make_error(422, "Unprocessable Entity", "Data duplicated")
+        db = minitwit.get_db()
+        db.execute('''insert into follower (who_id, whom_id)
+            values (?, ?)''',
+            [user_id, data["whom_id"]])
+        db.commit()
+    return jsonify(data)
+
+
+@app.route('/users/<user_id>/unfollow', methods = ['POST', 'GET', 'PUT', 'DELETE'])
+def remove_follow(user_id):
+    '''Unfollow: json data: whom_id'''
+    if not request.json:
+        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    if request.method != 'DELETE':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+
+    data = request.json
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if data:
+        '''Check who_id and whom_id existing'''
+        cur = minitwit.query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
+        if cur[0] == 0:
+            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+        db = minitwit.get_db()
+        db.execute('''delete from follower
+        where who_id = ? and whom_id = ?''',
+         [user_id, data["whom_id"]])
+        db.commit()
+    return jsonify(data)
+
+
+@app.route('/users/<user_id>/change_password', methods = ['POST', 'GET', 'PUT', 'DELETE'])
+def change_password(user_id):
+    '''Change password: json data: password, confirmed_password'''
+    if not request.json:
+        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    if request.method != 'PUT':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+
+    data = request.json
+    get_credentials(data["username"])
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if data:
+        '''Check user_id existing'''
+        cur = minitwit.query_db('select count(*) from user where user_id = ?', [user_id], one=True)
+        if cur[0] == 0:
+            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+        '''check password and confirmed password are equal'''
+        if data["password"] != data["confirmed_password"]:
+            return make_error(422, "Unprocessable Entity", "password and confirmed password not consistent")
+        db = minitwit.get_db()
+        pw = generate_password_hash(data['password'])
+        db.execute('''update user
+        set pw_hash = ?
+        where user_id = ?''',
+        [pw, user_id])
+        db.commit()
+    return jsonify(data)
+
+
+@app.route('/users/Sign_up', methods = ['POST', 'GET', 'PUT', 'DELETE'])
+def Sign_up():
+    '''User Sign up: json data: username, email, password, confirmed_password'''
+    if not request.json:
+        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    if request.method != 'POST':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+
+    data = request.json
+
+    if data:
+        if not data["username"] or not data["email"] or not data["password"] \
+            or not data["confirmed_password"] or data["password"] != data["confirmed_password"]:
+            return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+        '''check duplicate'''
+        cur = minitwit.query_db('select count(*) from user where username = ?', [data["username"]], one=True)
+        cur1 = minitwit.query_db('select count(*) from user where email = ?', [data["email"]], one=True)
+        if cur[0] > 0:
+            return make_error(422, "Unprocessable Entity", "Duplicated Username")
+        if cur1[0] > 0:
+            return make_error(422, "Unprocessable Entity", "Duplicated email")
+        pw = generate_password_hash(data["password"])
+        db = minitwit.get_db()
+        db.execute('''insert into user (username, email, pw_hash)
+            values (?, ?, ?)''',
+            [data["username"], data["email"], pw])
         db.commit()
     return jsonify(data)
 
