@@ -8,7 +8,6 @@
     :copyright: © 2010 by the Pallets team.
     :license: BSD, see LICENSE for more details.
 """
-
 import mt_api
 import time
 from sqlite3 import dbapi2 as sqlite3
@@ -63,21 +62,6 @@ def initdb_command():
     """Creates the database tables."""
     init_db()
     print('Initialized the database.')
-
-
-def populate_db():
-    """Re-populates the database with test data"""
-    db = get_db()
-    with app.open_resource('population.sql', mode='r') as f:
-        db.cursor().executescript(f.read())
-    db.commit()
-
-
-@app.cli.command('populatedb')
-def populatedb_command():
-    """Inputs data in database tables."""
-    populate_db()
-    print('Database population is completed.')
 
 
 def query_db(query, args=(), one=False):
