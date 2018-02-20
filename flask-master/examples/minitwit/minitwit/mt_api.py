@@ -26,6 +26,13 @@ def get_credentials(username):
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
 
 
+def get_credentials_by_user_id(user_id):
+    user_name = minitwit.query_db('''select username from user where user.user_id = ?''', [user_id], one=True)
+    pw_hash = minitwit.query_db('''select pw_hash from user where user.user_id = ?''', [user_id], one=True)
+    app.config['BASIC_AUTH_USERNAME'] = user_name[0]
+    app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
+
+
 def make_error(status_code, message, reason):
     response = jsonify({
         "status" : status_code,
@@ -58,10 +65,6 @@ def only_json():
 
 @app.after_request
 def after_request(response):
-    print response.get_data()
-    print response.status
-    print response.status_code
-    print response.headers
     if response.status_code == 400:
         return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
     if response.status_code == 500:
@@ -73,22 +76,6 @@ def after_request(response):
     return response
 
 
-# @app.route('/users/<user_id>/timeline')
-# def user_timeline(user_id):
-#     messages = minitwit.query_db('''
-#         select message.*, user.* from message, user
-#         where message.author_id = user.user_id and (
-#             user.user_id = ? or
-#             user.user_id in (select whom_id from follower
-#                                     where who_id = ?))
-#         order by message.pub_date desc limit ?''',
-#         [user_id, user_id, minitwit.PER_PAGE])
-#     print messages
-#     messages = map(dict, messages)
-#     print messages
-#     return jsonify(messages)
-
-
 @app.route('/users/<username>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def user_info(username):
     """Gets user's information"""
@@ -98,7 +85,6 @@ def user_info(username):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
         user = minitwit.query_db('''select * from user where user.username = ?''', [username])
-        print user
         user = map(dict, user)
         return jsonify(user)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
@@ -118,6 +104,7 @@ def insert_message(username):
             db.execute('''insert into message (author_id, text, pub_date)
             values (?, ?, ?)''', [user_id, data["text"], int(time.time())])
             db.commit()
+            print 'Your message was recorded'
         return jsonify(data)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
@@ -158,6 +145,7 @@ def add_follow_user(username1, username2):
         db = minitwit.get_db()
         db.execute('insert into follower (who_id, whom_id) values (?, ?)', [who_id, whom_id])
         db.commit()
+        print 'You are now following %s' % username2
         return jsonify(data)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
@@ -173,9 +161,7 @@ def get_messages():
             where message.author_id = user.user_id
             order by message.pub_date desc''',
             )
-    print messages
     messages = map(dict, messages)
-    print messages
     return jsonify(messages)
 
 
@@ -185,14 +171,10 @@ def get_message_user(user_id):
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
     data = request.json
-    get_credentials(data["username"])
-    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     messages = minitwit.query_db('''
         select message.text, user.username from message, user
         where message.author_id = user.user_id and user.user_id = ? ''',
         [user_id])
-    print messages
     messages = map(dict, messages)
 
     return jsonify(messages)
@@ -204,14 +186,13 @@ def user_followers(user_id):
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
     data = request.json
-    get_credentials(data["username"])
+    get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     messages = minitwit.query_db('''
         select u1.username as followee, u2.username as follower from user u1, follower f, user u2
         where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
         [user_id])
-    print messages
     messages = map(dict, messages)
 
     return jsonify(messages)
@@ -223,7 +204,7 @@ def user_follow(user_id):
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
     data = request.json
-    get_credentials(data["username"])
+    get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     messages = minitwit.query_db('''
@@ -232,7 +213,6 @@ def user_follow(user_id):
         [user_id])
 
     messages = map(dict, messages)
-    print messages
     return jsonify(messages)
 
 
@@ -245,7 +225,7 @@ def add_message(user_id):
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
     data = request.json
-    get_credentials(data["username"])
+    get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
@@ -259,6 +239,7 @@ def add_message(user_id):
         values (?, ?)''',
         [data["author_id"], data["text"]])
         db.commit()
+        print 'Your message was successfully recorded'
     return jsonify(data)
 
 
@@ -271,7 +252,7 @@ def add_follow(user_id):
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
     data = request.json
-    get_credentials(data["username"])
+    get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
@@ -284,6 +265,7 @@ def add_follow(user_id):
             values (?, ?)''',
             [user_id, data["whom_id"]])
         db.commit()
+        print 'You are following user has user_id ', data['whom_id']
     return jsonify(data)
 
 
@@ -296,7 +278,7 @@ def remove_follow(user_id):
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
     data = request.json
-    get_credentials(data["username"])
+    get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
@@ -309,6 +291,7 @@ def remove_follow(user_id):
         where who_id = ? and whom_id = ?''',
          [user_id, data["whom_id"]])
         db.commit()
+        print 'You are no longer following user has ', data["whom_id"]
     return jsonify(data)
 
 
@@ -321,7 +304,7 @@ def change_password(user_id):
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
     data = request.json
-    get_credentials(data["username"])
+    get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
@@ -339,6 +322,38 @@ def change_password(user_id):
         where user_id = ?''',
         [pw, user_id])
         db.commit()
+        print 'Your password was successfully changed'
+    return jsonify(data)
+
+
+@app.route('/users/<user_id>/change_email', methods = ['POST', 'GET', 'PUT', 'DELETE'])
+def change_email(user_id):
+    '''Change email: json data: email, confirmed_email'''
+    if not request.json:
+        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    if request.method != 'PUT':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+
+    data = request.json
+    get_credentials_by_user_id(user_id)
+    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if data:
+        '''Check user_id existing'''
+        cur = minitwit.query_db('select count(*) from user where user_id = ?', [user_id], one=True)
+        if cur[0] == 0:
+            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+        '''check password and confirmed password are equal'''
+        if data["email"] != data["confirmed_email"]:
+            return make_error(422, "Unprocessable Entity", "password and confirmed password not consistent")
+        db = minitwit.get_db()
+        email = data["email"]
+        db.execute('''update user
+        set email = ?
+        where user_id = ?''',
+        [email, user_id])
+        db.commit()
+        print 'Your email was successfully changed'
     return jsonify(data)
 
 
@@ -369,6 +384,7 @@ def Sign_up():
             values (?, ?, ?)''',
             [data["username"], data["email"], pw])
         db.commit()
+        print 'You were successfully registered'
     return jsonify(data)
 
 
