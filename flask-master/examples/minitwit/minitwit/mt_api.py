@@ -1,10 +1,24 @@
 import minitwit
 import time
-from flask import Flask, request, jsonify, g, json, abort, Response, flash
+from sqlite3 import dbapi2 as sqlite3
+from hashlib import md5
+from datetime import datetime
+from flask import Flask, request, jsonify, g, json, abort, Response, flash, _app_ctx_stack, session
 from flask_basicauth import BasicAuth
 from werkzeug import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
+
+# configuration
+DATABASE = '/tmp/minitwit.db'
+PER_PAGE = 30
+DEBUG = True
+SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
+
+# create our little application :)
+app = Flask('mt_api')
+app.config.from_object(__name__)
+app.config.from_envvar('MINITWIT_SETTINGS', silent=True)
 
 # default authenticated configuration
 app.config['BASIC_AUTH_USERNAME'] = 'admin'
@@ -13,22 +27,78 @@ app.config['BASIC_AUTH_PASSWORD'] = 'admin123'
 basic_auth = BasicAuth(app)
 
 
+def get_db():
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    top = _app_ctx_stack.top
+    if not hasattr(top, 'sqlite_db'):
+        top.sqlite_db = sqlite3.connect(app.config['DATABASE'])
+        top.sqlite_db.row_factory = sqlite3.Row
+    return top.sqlite_db
+
+
+@app.teardown_appcontext
+def close_database(exception):
+    """Closes the database again at the end of the request."""
+    top = _app_ctx_stack.top
+    if hasattr(top, 'sqlite_db'):
+        top.sqlite_db.close()
+
+
+def init_db():
+    """Initializes the database."""
+    db = get_db()
+    with app.open_resource('schema.sql', mode='r') as f:
+        db.cursor().executescript(f.read())
+    db.commit()
+
+
+@app.cli.command('initdb')
+def initdb_command():
+    """Creates the database tables."""
+    init_db()
+    print('Initialized the database.')
+
+
+def query_db(query, args=(), one=False):
+    """Queries the database and returns a list of dictionaries."""
+    cur = get_db().execute(query, args)
+    rv = cur.fetchall()
+    return (rv[0] if rv else None) if one else rv
+
+
+def get_user_id(username):
+    """Convenience method to look up the id for a username."""
+    rv = query_db('select user_id from user where username = ?',
+                  [username], one=True)
+    return rv[0] if rv else None
+
+
+@app.before_request
+def before_request():
+    g.user = None
+    # if 'user_id' in session:
+    #     g.user = query_db('select * from user where user_id = ?',
+    #                       [session['user_id']], one=True)
+
+
 '''return username of an user_id'''
 def get_username(user_id):
-    cur = minitwit.query_db('select username from user where user_id = ?', [user_id], one = True)
+    cur = query_db('select username from user where user_id = ?', [user_id], one = True)
     return cur[0] if cur else None
 
 
 def get_credentials(username):
-    user_name = minitwit.query_db('''select username from user where user.username = ?''', [username], one=True)
-    pw_hash = minitwit.query_db('''select pw_hash from user where user.username = ?''', [username], one=True)
+    user_name = query_db('''select username from user where user.username = ?''', [username], one=True)
+    pw_hash = query_db('''select pw_hash from user where user.username = ?''', [username], one=True)
     app.config['BASIC_AUTH_USERNAME'] = user_name[0]
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
 
 
 def get_credentials_by_user_id(user_id):
-    user_name = minitwit.query_db('''select username from user where user.user_id = ?''', [user_id], one=True)
-    pw_hash = minitwit.query_db('''select pw_hash from user where user.user_id = ?''', [user_id], one=True)
+    user_name = query_db('''select username from user where user.user_id = ?''', [user_id], one=True)
+    pw_hash = query_db('''select pw_hash from user where user.user_id = ?''', [user_id], one=True)
     app.config['BASIC_AUTH_USERNAME'] = user_name[0]
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
 
@@ -44,7 +114,7 @@ def make_error(status_code, message, reason):
 
 def populate_db():
     """Re-populates the database with test data"""
-    db = minitwit.get_db()
+    db = get_db()
     with app.open_resource('population.sql', mode='r') as f:
         db.cursor().executescript(f.read())
     db.commit()
@@ -84,7 +154,7 @@ def user_info(username):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
-        user = minitwit.query_db('''select * from user where user.username = ?''', [username])
+        user = query_db('''select * from user where user.username = ?''', [username])
         user = map(dict, user)
         return jsonify(user)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
@@ -95,12 +165,12 @@ def insert_message(username):
     """Inserts a new message from current <username>"""
     if request.method == 'POST':
         data = request.get_json()
-        user_id = minitwit.get_user_id(username)
+        user_id = get_user_id(username)
         get_credentials(data["username"])
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
-            db = minitwit.get_db()
+            db = get_db()
             db.execute('''insert into message (author_id, text, pub_date)
             values (?, ?, ?)''', [user_id, data["text"], int(time.time())])
             db.commit()
@@ -112,7 +182,7 @@ def insert_message(username):
 @app.route('/users/<username>/messages', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def get_user_messages(username):
     """Displays a user's tweets"""
-    profile_user = minitwit.query_db('select * from user where username = ?',[username], one=True)
+    profile_user = query_db('select * from user where username = ?',[username], one=True)
     if profile_user is None:
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     data = request.get_json()
@@ -120,8 +190,8 @@ def get_user_messages(username):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
-        messages = minitwit.query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
-        [profile_user['user_id'], minitwit.PER_PAGE])
+        messages = query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
+        [profile_user['user_id'], PER_PAGE])
         messages = map(dict, messages)
         return jsonify(messages)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
@@ -134,15 +204,15 @@ def add_follow_user(username1, username2):
     get_credentials(username1)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    who_id = minitwit.get_user_id(username1)
-    whom_id = minitwit.get_user_id(username2)
+    who_id = get_user_id(username1)
+    whom_id = get_user_id(username2)
     if whom_id is None:
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-    cur = minitwit.query_db('select count(*) from follower where who_id = ? and whom_id = ?', [who_id, whom_id], one=True)
+    cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [who_id, whom_id], one=True)
     if cur[0] > 0:
         return make_error(422, "Unprocessable Entity", "Data duplicated")
     if request.method == 'POST':
-        db = minitwit.get_db()
+        db = get_db()
         db.execute('insert into follower (who_id, whom_id) values (?, ?)', [who_id, whom_id])
         db.commit()
         print 'You are now following %s' % username2
@@ -156,7 +226,7 @@ def get_messages():
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
-    messages = minitwit.query_db('''
+    messages = query_db('''
             select message.text, user.username from message, user
             where message.author_id = user.user_id
             order by message.pub_date desc''',
@@ -171,7 +241,7 @@ def get_message_user(user_id):
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
     data = request.json
-    messages = minitwit.query_db('''
+    messages = query_db('''
         select message.text, user.username from message, user
         where message.author_id = user.user_id and user.user_id = ? ''',
         [user_id])
@@ -189,7 +259,7 @@ def user_followers(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    messages = minitwit.query_db('''
+    messages = query_db('''
         select u1.username as followee, u2.username as follower from user u1, follower f, user u2
         where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
         [user_id])
@@ -207,7 +277,7 @@ def user_follow(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    messages = minitwit.query_db('''
+    messages = query_db('''
         select u1.username as followee, u2.username as follower from user u1, follower f, user u2
         where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
         [user_id])
@@ -234,7 +304,7 @@ def add_message(user_id):
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Invalid Username ad/or Password')
 
-        db = minitwit.get_db()
+        db = get_db()
         db.execute('''insert into message (author_id, text)
         values (?, ?)''',
         [data["author_id"], data["text"]])
@@ -257,10 +327,10 @@ def add_follow(user_id):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
         '''Check duplicate'''
-        cur = minitwit.query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
+        cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
         if cur[0] > 0:
             return make_error(422, "Unprocessable Entity", "Data duplicated")
-        db = minitwit.get_db()
+        db = get_db()
         db.execute('''insert into follower (who_id, whom_id)
             values (?, ?)''',
             [user_id, data["whom_id"]])
@@ -283,10 +353,10 @@ def remove_follow(user_id):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
         '''Check who_id and whom_id existing'''
-        cur = minitwit.query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
+        cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
         if cur[0] == 0:
             return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-        db = minitwit.get_db()
+        db = get_db()
         db.execute('''delete from follower
         where who_id = ? and whom_id = ?''',
          [user_id, data["whom_id"]])
@@ -309,13 +379,13 @@ def change_password(user_id):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
         '''Check user_id existing'''
-        cur = minitwit.query_db('select count(*) from user where user_id = ?', [user_id], one=True)
+        cur = query_db('select count(*) from user where user_id = ?', [user_id], one=True)
         if cur[0] == 0:
             return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
         '''check password and confirmed password are equal'''
         if data["password"] != data["confirmed_password"]:
             return make_error(422, "Unprocessable Entity", "password and confirmed password not consistent")
-        db = minitwit.get_db()
+        db = get_db()
         pw = generate_password_hash(data['password'])
         db.execute('''update user
         set pw_hash = ?
@@ -340,13 +410,13 @@ def change_email(user_id):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
         '''Check user_id existing'''
-        cur = minitwit.query_db('select count(*) from user where user_id = ?', [user_id], one=True)
+        cur = query_db('select count(*) from user where user_id = ?', [user_id], one=True)
         if cur[0] == 0:
             return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
         '''check password and confirmed password are equal'''
         if data["email"] != data["confirmed_email"]:
             return make_error(422, "Unprocessable Entity", "password and confirmed password not consistent")
-        db = minitwit.get_db()
+        db = get_db()
         email = data["email"]
         db.execute('''update user
         set email = ?
@@ -372,14 +442,14 @@ def Sign_up():
             or not data["confirmed_password"] or data["password"] != data["confirmed_password"]:
             return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
         '''check duplicate'''
-        cur = minitwit.query_db('select count(*) from user where username = ?', [data["username"]], one=True)
-        cur1 = minitwit.query_db('select count(*) from user where email = ?', [data["email"]], one=True)
+        cur = query_db('select count(*) from user where username = ?', [data["username"]], one=True)
+        cur1 = query_db('select count(*) from user where email = ?', [data["email"]], one=True)
         if cur[0] > 0:
             return make_error(422, "Unprocessable Entity", "Duplicated Username")
         if cur1[0] > 0:
             return make_error(422, "Unprocessable Entity", "Duplicated email")
         pw = generate_password_hash(data["password"])
-        db = minitwit.get_db()
+        db = get_db()
         db.execute('''insert into user (username, email, pw_hash)
             values (?, ?, ?)''',
             [data["username"], data["email"], pw])
@@ -387,6 +457,28 @@ def Sign_up():
         print 'You were successfully registered'
     return jsonify(data)
 
+
+@app.route('/users', methods = ['POST', 'GET', 'PUT', 'DELETE'])
+def get_time_lime():
+    '''get user timeline or if no user is logged in it will get the public timeline instead.
+    '''
+    if not request.json:
+        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    if request.method != 'GET':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+    data = request.get_json();
+    if data['username']:
+        get_credentials(data["username"])
+        if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+            return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    user = query_db('''select message.*, user.* from message, user
+    where message.author_id = user.user_id and (
+        user.user_id = ? or
+        user.user_id in (select whom_id from follower
+                                where who_id = ?))
+    order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
+    user = map(dict, user)
+    return jsonify(user)
 
 if __name__ == '__main__':
     app.run(debug=True)
