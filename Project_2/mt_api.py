@@ -1,4 +1,5 @@
 import minitwit
+import os
 import time
 from sqlite3 import dbapi2 as sqlite3
 from hashlib import md5
@@ -11,11 +12,11 @@ app = Flask(__name__)
 
 # configuration
 # DATABASE = '/tmp/minitwit.db'
-DATABASE = '/tmp/mt_api.db'
+DATABASE = os.path.join(app.root_path, 'mt_api.db')
 PER_PAGE = 30
 DEBUG = True
-# SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
-SECRET_KEY = '\x01\xeei\xa6\xa7\x7f\xec\xd0\xfb\x83fv|\xf0*\xe7\xa9R\x8b\xca0\x12\x03\xfc'
+SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
+# SECRET_KEY = '\x01\xeei\xa6\xa7\x7f\xec\xd0\xfb\x83fv|\xf0*\xe7\xa9R\x8b\xca0\x12\x03\xfc'
 
 # create our little application :)
 app = Flask('mt_api')
@@ -129,10 +130,10 @@ def populatedb_command():
     print('Database population is completed.')
 
 
-@app.before_request
-def only_json():
-    if not request.is_json:
-        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+# @app.before_request
+# def only_json():
+#     if not request.is_json:
+#         return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
 
 
 @app.after_request
@@ -152,22 +153,31 @@ def after_request(response):
 def user_info(id_or_name):
     """Gets user's information"""
     data = request.get_json()
-    if data['username']:
-        get_credentials(data["username"])
-        if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-            return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if 'username' in data:
+        # get_credentials(data["username"])
+        # if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        #     return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if request.method == 'GET':
             user = query_db('''select * from user where user.username = ?''', [data['username']], one=True)
-            user = map(dict, user)
+            print user
+            # user = map(dict, user)
+            if user:
+                user = dict(user)
+                return jsonify(user)
             return jsonify(user)
-    if data['user_id']:
-        get_credentials_by_user_id(data["user_id"])
-        if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-            return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+    if 'user_id' in data:
+        # get_credentials_by_user_id(data["user_id"])
+        # if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
+        #     return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if request.method == 'GET':
             user = query_db('''select * from user where user_id = ?''', [data['user_id']], one=True)
-            user = map(dict, user)
+            if user:
+                user = dict(user)
+                return jsonify(user)
             return jsonify(user)
+            # user = map(dict, user)
+            # user = dict(user)
+            # return jsonify(user)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
 
@@ -293,12 +303,14 @@ def user_follow(user_id):
     #     where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
     #     [user_id])
     messages = query_db('''
-                        select message.*, user.* from message, user
-                        where user.user_id = message.author_id and user.user_id = ?
-                        order by message.pub_date desc limit ?''',
-                        [data['user_id'], PER_PAGE])
-    messages = map(dict, messages)
-    return jsonify(messages)
+                        select 1 from follower
+                        where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
+    print messages
+    # messages = map(dict, messages[0])
+    if messages:
+        return jsonify(messages[0])
+    else:
+        return jsonify(messages)
 
 
 @app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -450,31 +462,31 @@ def Sign_up():
     if request.method != 'POST':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
-    data = request.json
-
+    data = request.get_json()
+    print data
     if data:
-        if not data["username"] or not data["email"] or not data["password"] \
-            or not data["confirmed_password"] or data["password"] != data["confirmed_password"]:
-            return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-        '''check duplicate'''
-        cur = query_db('select count(*) from user where username = ?', [data["username"]], one=True)
-        cur1 = query_db('select count(*) from user where email = ?', [data["email"]], one=True)
-        if cur[0] > 0:
-            return make_error(422, "Unprocessable Entity", "Duplicated Username")
-        if cur1[0] > 0:
-            return make_error(422, "Unprocessable Entity", "Duplicated email")
-        pw = generate_password_hash(data["password"])
+        # if not data["username"] or not data["email"] or not data["password"] \
+        #     or not data["confirmed_password"] or data["password"] != data["confirmed_password"]:
+        #     return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+        # '''check duplicate'''
+        # cur = query_db('select count(*) from user where username = ?', [data["username"]], one=True)
+        # cur1 = query_db('select count(*) from user where email = ?', [data["email"]], one=True)
+        # if cur[0] > 0:
+        #     return make_error(422, "Unprocessable Entity", "Duplicated Username")
+        # if cur1[0] > 0:
+        #     return make_error(422, "Unprocessable Entity", "Duplicated email")
+        # pw = generate_password_hash(data["password"])
         db = get_db()
         db.execute('''insert into user (username, email, pw_hash)
             values (?, ?, ?)''',
-            [data["username"], data["email"], pw])
+            [data["username"], data["email"], data["pw_hash"]])
         db.commit()
         print 'You were successfully registered'
     return jsonify(data)
 
 
 @app.route('/users', methods = ['POST', 'GET', 'PUT', 'DELETE'])
-def get_time_lime():
+def user_time_line():
     '''get user timeline or if no user is logged in it will get the public timeline instead.
     '''
     if not request.json:
@@ -482,7 +494,7 @@ def get_time_lime():
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
     data = request.get_json();
-    if data['user_id']:
+    if 'user_id' in data:
         get_credentials_by_user_id(data["user_id"])
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
@@ -499,6 +511,19 @@ def get_time_lime():
     print '\nbreak2\n'
     print user
     return jsonify(user)
+
+
+@app.route('/timeline', methods=['POST', 'GET', 'PUT', 'DELETE'])
+def public_time_line():
+    '''display latest messages of all users.'''
+    # if not request.json:
+    #     return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+    # if request.method != 'GET':
+    #     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
+    #     data = request.get_json();
+    messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+    messages = map(dict, messages)
+    return jsonify(messages)
 
 
 if __name__ == '__main__':
