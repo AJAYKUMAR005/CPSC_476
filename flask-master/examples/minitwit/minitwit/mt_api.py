@@ -12,7 +12,6 @@ app = Flask(__name__)
 
 # configuration
 # DATABASE = '/tmp/minitwit.db'
-# DATABASE = '/tmp/mt_api.db'
 DATABASE = os.path.join(app.root_path, 'mt_api.db')
 PER_PAGE = 30
 DEBUG = True
@@ -131,10 +130,10 @@ def populatedb_command():
     print('Database population is completed.')
 
 
-@app.before_request
-def only_json():
-    if not request.is_json:
-        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
+# @app.before_request
+# def only_json():
+#     if not request.is_json:
+#         return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
 
 
 @app.after_request

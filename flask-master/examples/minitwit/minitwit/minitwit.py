@@ -46,7 +46,7 @@ def gravatar_url(email, size=80):
 def before_request():
     g.user = None
     if 'user_id' in session:
-        url = 'http://127.0.0.1:5001/users/' + str(session['user_id'])
+        url = 'http://localhost:8080/users/' + str(session['user_id'])
         payload = {'user_id': session['user_id']}
         r = requests.get(url, json=payload)
         # g.user = query_db('select * from user where user_id = ?',
@@ -63,7 +63,7 @@ def timeline():
     if not g.user:
         return redirect(url_for('public_timeline'))
     else:
-        url = 'http://127.0.0.1:5001/users'
+        url = 'http://localhost:8080/users'
         payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username']}
         r = requests.get(url, json=payload)
         return render_template('timeline.html', messages=r.json())
@@ -73,7 +73,7 @@ def timeline():
 def public_timeline():
     """Displays the latest messages of all users."""
     payload = {}
-    url = 'http://127.0.0.1:5001/timeline'
+    url = 'http://localhost:8080/timeline'
     r = requests.get(url, json=payload)
     return render_template('timeline.html', messages=r.json())
 
@@ -82,7 +82,7 @@ def public_timeline():
 def user_timeline(username):
     """Display's a users tweets."""
     payload = {'username': username}
-    url = 'http://127.0.0.1:5001/users/' + username
+    url = 'http://localhost:8080/users/' + username
     r = requests.get(url, json=payload)
     profile_user = r.json()
     if profile_user is None:
@@ -90,11 +90,11 @@ def user_timeline(username):
     followed = False
     if g.user:
         payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'profile_user_id': profile_user['user_id']}
-        url = 'http://127.0.0.1:5001/users/' + str(session['user_id']) + '/follow'
+        url = 'http://localhost:8080/users/' + str(session['user_id']) + '/follow'
         r = requests.get(url, json=payload)
         followed = r.json() is not None
     payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'profile_user_id': profile_user['user_id']}
-    url = 'http://127.0.0.1:5001/users/' + profile_user['username'] + '/messages'
+    url = 'http://localhost:8080/users/' + profile_user['username'] + '/messages'
     r = requests.get(url, json=payload)
     return render_template('timeline.html', messages = r.json(), followed=followed, profile_user=profile_user)
 
@@ -107,7 +107,7 @@ def follow_user(username):
     if whom_id is None:
         abort(404)
     payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': whom_id}
-    url = 'http://127.0.0.1:5001/users/' + str(session['user_id']) + '/add_follow'
+    url = 'http://localhost:8080/users/' + str(session['user_id']) + '/add_follow'
     r = requests.post(url, json=payload)
     flash('You are now following "%s"' % username)
     return redirect(url_for('user_timeline', username=username))
@@ -122,7 +122,7 @@ def unfollow_user(username):
     if whom_id is None:
         abort(404)
     payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': whom_id}
-    url = 'http://127.0.0.1:5001/users/' + str(session['user_id']) + '/unfollow'
+    url = 'http://localhost:8080/users/' + str(session['user_id']) + '/unfollow'
     r = requests.delete(url, json=payload)
     flash('You are no longer following "%s"' % username)
     return redirect(url_for('user_timeline', username=username))
@@ -135,7 +135,7 @@ def add_message():
         abort(401)
     if request.form['text']:
         payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text']}
-        url = 'http://127.0.0.1:5001/users/' + session['username'] + '/add_message'
+        url = 'http://localhost:8080/users/' + session['username'] + '/add_message'
         r = requests.post(url, json=payload)
         flash('Your message was recorded')
     return redirect(url_for('timeline'))
@@ -151,7 +151,7 @@ def login():
         payload = {'username': request.form['username']}
         print request.form['username']
         print payload
-        url = 'http://127.0.0.1:5001/users/' + request.form['username']
+        url = 'http://localhost:8080/users/' + request.form['username']
         r = requests.get(url, json=payload)
         user = r.json()
         print user
@@ -190,7 +190,7 @@ def register():
         else:
             payload = {'username': request.form['username'], 'email': request.form['email'], 'pw_hash': generate_password_hash(request.form['password'])}
             print payload
-            url = 'http://127.0.0.1:5001/users/Sign_up'
+            url = 'http://localhost:8080/users/Sign_up'
             r = requests.post(url, json=payload)
             flash('You were successfully registered and can login now')
             return redirect(url_for('login'))
