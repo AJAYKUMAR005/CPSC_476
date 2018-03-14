@@ -16,7 +16,6 @@ DATABASE = os.path.join(app.root_path, 'mt_api.db')
 PER_PAGE = 30
 DEBUG = True
 SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
-# SECRET_KEY = '\x01\xeei\xa6\xa7\x7f\xec\xd0\xfb\x83fv|\xf0*\xe7\xa9R\x8b\xca0\x12\x03\xfc'
 
 # create our little application :)
 app = Flask('mt_api')
@@ -78,14 +77,6 @@ def get_user_id(username):
     return rv[0] if rv else None
 
 
-# @app.before_request
-# def before_request():
-#     g.user = None
-#     if 'user_id' in session:
-#         g.user = query_db('select * from user where user_id = ?',
-#                           [session['user_id']], one=True)
-
-
 def get_username(user_id):
     '''return username of an user_id'''
     cur = query_db('select username from user where user_id = ?', [user_id], one = True)
@@ -130,12 +121,6 @@ def populatedb_command():
     print('Database population is completed.')
 
 
-# @app.before_request
-# def only_json():
-#     if not request.is_json:
-#         return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-
-
 @app.after_request
 def after_request(response):
     if response.status_code == 400:
@@ -154,9 +139,6 @@ def user_info(id_or_name):
     """Gets user's information"""
     data = request.get_json()
     if 'username' in data:
-        # get_credentials(data["username"])
-        # if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        #     return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if request.method == 'GET':
             user = query_db('''select * from user where user.username = ?''', [data['username']], one=True)
             print user
@@ -166,18 +148,12 @@ def user_info(id_or_name):
                 return jsonify(user)
             return jsonify(user)
     if 'user_id' in data:
-        # get_credentials_by_user_id(data["user_id"])
-        # if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        #     return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if request.method == 'GET':
             user = query_db('''select * from user where user_id = ?''', [data['user_id']], one=True)
             if user:
                 user = dict(user)
                 return jsonify(user)
             return jsonify(user)
-            # user = map(dict, user)
-            # user = dict(user)
-            # return jsonify(user)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
 
@@ -290,7 +266,6 @@ def user_followers(user_id):
 
 @app.route('/users/<user_id>/follow', methods = ['POST', 'GET', 'PUT', 'DELETE'])
 def user_follow(user_id):
-    # '''return all users that the user <user_id> is following'''
     '''return 1 if user_id has followers. Otherwise, return None'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
@@ -298,15 +273,10 @@ def user_follow(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    # messages = query_db('''
-    #     select u1.username as followee, u2.username as follower from user u1, follower f, user u2
-    #     where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
-    #     [user_id])
     messages = query_db('''
                         select 1 from follower
                         where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
     print messages
-    # messages = map(dict, messages[0])
     if messages:
         return jsonify(messages[0])
     else:
@@ -405,13 +375,6 @@ def change_password(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        '''Check user_id existing'''
-        cur = query_db('select count(*) from user where user_id = ?', [user_id], one=True)
-        if cur[0] == 0:
-            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-        '''check password and confirmed password are equal'''
-        if data["password"] != data["confirmed_password"]:
-            return make_error(422, "Unprocessable Entity", "password and confirmed password not consistent")
         db = get_db()
         pw = generate_password_hash(data['password'])
         db.execute('''update user
@@ -436,13 +399,6 @@ def change_email(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        '''Check user_id existing'''
-        cur = query_db('select count(*) from user where user_id = ?', [user_id], one=True)
-        if cur[0] == 0:
-            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-        '''check password and confirmed password are equal'''
-        if data["email"] != data["confirmed_email"]:
-            return make_error(422, "Unprocessable Entity", "password and confirmed password not consistent")
         db = get_db()
         email = data["email"]
         db.execute('''update user
@@ -465,17 +421,6 @@ def Sign_up():
     data = request.get_json()
     print data
     if data:
-        # if not data["username"] or not data["email"] or not data["password"] \
-        #     or not data["confirmed_password"] or data["password"] != data["confirmed_password"]:
-        #     return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-        # '''check duplicate'''
-        # cur = query_db('select count(*) from user where username = ?', [data["username"]], one=True)
-        # cur1 = query_db('select count(*) from user where email = ?', [data["email"]], one=True)
-        # if cur[0] > 0:
-        #     return make_error(422, "Unprocessable Entity", "Duplicated Username")
-        # if cur1[0] > 0:
-        #     return make_error(422, "Unprocessable Entity", "Duplicated email")
-        # pw = generate_password_hash(data["password"])
         db = get_db()
         db.execute('''insert into user (username, email, pw_hash)
             values (?, ?, ?)''',
@@ -504,23 +449,15 @@ def user_time_line():
         user.user_id in (select whom_id from follower
                                 where who_id = ?))
     order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
-    print '\nbreak1\n'
-    print user
-    # print user[0]['username']
     user = map(dict, user)
-    print '\nbreak2\n'
-    print user
     return jsonify(user)
 
 
 @app.route('/timeline', methods=['POST', 'GET', 'PUT', 'DELETE'])
 def public_time_line():
     '''display latest messages of all users.'''
-    # if not request.json:
-    #     return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-    # if request.method != 'GET':
-    #     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-    #     data = request.get_json();
+    if request.method != 'GET':
+        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
     messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
     messages = map(dict, messages)
     return jsonify(messages)
