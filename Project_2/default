@@ -86,26 +86,31 @@
 #}
 
 upstream minitwit {
-  server 127.0.0.1:5100;
-  server 127.0.0.1:5101;
-  server 127.0.0.1:5102;
+  server 127.0.0.1:5100 max_fails=1 fail_timeout=15s;
+  server 127.0.0.1:5101 max_fails=1 fail_timeout=15s;
+  server 127.0.0.1:5102 max_fails=1 fail_timeout=15s;
+
 }
 
 server {
   listen 80;
+  server_name localhost;
+	access_log /var/log/nginx/access.log;
   location / {
     proxy_pass http://minitwit;
   }
 }
 
 upstream mt_api {
-  server localhost:5000;
-  server localhost:5001;
-  server localhost:5002;
+  server localhost:5000 max_fails=1 fail_timeout=15s;
+  server localhost:5001 max_fails=1 fail_timeout=15s;
+  server localhost:5002 max_fails=1 fail_timeout=15s;
+
 }
 
 server {
   listen 8080;
+	access_log /var/log/nginx/access.log;
   location / {
     proxy_pass http://mt_api;
   }
