@@ -11,7 +11,6 @@
 import requests
 import mt_api
 import time
-# from sqlite3 import dbapi2 as sqlite3
 from hashlib import md5
 from datetime import datetime
 from flask import Flask, request, session, url_for, redirect, \
@@ -19,10 +18,6 @@ from flask import Flask, request, session, url_for, redirect, \
 from werkzeug import check_password_hash, generate_password_hash
 
 
-# configuration
-# DATABASE = '/tmp/minitwit.db'
-# PER_PAGE = 30
-# DEBUG = True
 SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
 
 # create our little application :)
@@ -49,8 +44,6 @@ def before_request():
         url = 'http://localhost:8080/users/' + str(session['user_id'])
         payload = {'user_id': session['user_id']}
         r = requests.get(url, json=payload)
-        # g.user = query_db('select * from user where user_id = ?',
-        #                   [session['user_id']], one=True)
         g.user = r.json()
 
 
