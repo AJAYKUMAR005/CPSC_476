@@ -86,7 +86,7 @@ def user_timeline(username):
         url = 'http://localhost:8080/users/' + str(session['user_id']) + '/follow'
         r = requests.get(url, json=payload)
         followed = r.json() is not None
-    payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'profile_user_id': profile_user['user_id']}
+    payload = {'pw_hash': session['pw_hash'], 'username': session['username'], 'profile_user_id': profile_user['user_id']}
     url = 'http://localhost:8080/users/' + profile_user['username'] + '/messages'
     r = requests.get(url, json=payload)
     return render_template('timeline.html', messages = r.json(), followed=followed, profile_user=profile_user)
@@ -127,7 +127,7 @@ def add_message():
     if 'user_id' not in session:
         abort(401)
     if request.form['text']:
-        payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text']}
+        payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time())}
         url = 'http://localhost:8080/users/' + session['username'] + '/add_message'
         r = requests.post(url, json=payload)
         flash('Your message was recorded')
