@@ -302,9 +302,9 @@ def add_message(user_id):
             return make_error(401, 'Unauthorized', 'Invalid Username ad/or Password')
 
         db = get_db()
-        db.execute('''insert into message (author_id, text)
-        values (?, ?)''',
-        [data["author_id"], data["text"]])
+        db.execute('''insert into message (author_id, text, pub_date)
+        values (?, ?, ?)''',
+        [data["author_id"], data["text"], data['pub_date']])
         db.commit()
         print 'Your message was successfully recorded'
     return jsonify(data)
