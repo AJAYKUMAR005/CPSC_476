@@ -362,54 +362,6 @@ def remove_follow(user_id):
     return jsonify(data)
 
 
-@app.route('/users/<user_id>/change_password', methods = ['POST', 'GET', 'PUT', 'DELETE'])
-def change_password(user_id):
-    '''Change password: json data: password, confirmed_password'''
-    if not request.json:
-        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-    if request.method != 'PUT':
-        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
-    data = request.json
-    get_credentials_by_user_id(user_id)
-    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    if data:
-        db = get_db()
-        pw = generate_password_hash(data['password'])
-        db.execute('''update user
-        set pw_hash = ?
-        where user_id = ?''',
-        [pw, user_id])
-        db.commit()
-        print 'Your password was successfully changed'
-    return jsonify(data)
-
-
-@app.route('/users/<user_id>/change_email', methods = ['POST', 'GET', 'PUT', 'DELETE'])
-def change_email(user_id):
-    '''Change email: json data: email, confirmed_email'''
-    if not request.json:
-        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-    if request.method != 'PUT':
-        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
-    data = request.json
-    get_credentials_by_user_id(user_id)
-    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    if data:
-        db = get_db()
-        email = data["email"]
-        db.execute('''update user
-        set email = ?
-        where user_id = ?''',
-        [email, user_id])
-        db.commit()
-        print 'Your email was successfully changed'
-    return jsonify(data)
-
-
 @app.route('/users/Sign_up', methods = ['POST', 'GET', 'PUT', 'DELETE'])
 def Sign_up():
     '''User Sign up: json data: username, email, password, confirmed_password'''
