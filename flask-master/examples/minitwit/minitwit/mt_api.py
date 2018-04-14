@@ -341,9 +341,13 @@ def add_follow(user_id):
         # if cur[0] > 0:
         #     return make_error(422, "Unprocessable Entity", "Data duplicated")
         db = get_db()
-        db.execute('''insert into follower (who_id, whom_id)
-            values (?, ?)''',
-            [user_id, data["whom_id"]])
+        # db.execute('''insert into follower (who_id, whom_id)
+        #     values (?, ?)''',
+        #     [user_id, data["whom_id"]])
+
+        date = query_db('''select date from message where user_id = ?''', [user_id])
+        db.execute('''update message set who_id = who_id + { ? } where username = ? and user_id = ? and date in (?)''', [data['whom_id'], data['username'], user_id, date])
+
         db.commit()
         print 'You are following user has user_id ', data['whom_id']
     return jsonify(data)
@@ -362,14 +366,18 @@ def remove_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        '''Check who_id and whom_id existing'''
-        cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
-        if cur[0] == 0:
-            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
+        # '''Check who_id and whom_id existing'''
+        # cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
+        # if cur[0] == 0:
+        #     return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
         db = get_db()
-        db.execute('''delete from follower
-        where who_id = ? and whom_id = ?''',
-         [user_id, data["whom_id"]])
+        # db.execute('''delete from follower
+        # where who_id = ? and whom_id = ?''',
+        #  [user_id, data["whom_id"]])
+
+        date = query_db('''select date from message where user_id = ?''', [user_id])
+        db.execute('''update message set who_id = who_id - { ? } where username = ? and user_id = ? and date in (?)''', [data['whom_id'], data['username'], user_id, date])
+
         db.commit()
         print 'You are no longer following user has ', data["whom_id"]
     return jsonify(data)
@@ -387,9 +395,12 @@ def Sign_up():
     print data
     if data:
         db = get_db()
-        db.execute('''insert into user (username, email, pw_hash)
-            values (?, ?, ?)''',
-            [data["username"], data["email"], data["pw_hash"]])
+        # db.execute('''insert into user (username, email, pw_hash)
+        #     values (?, ?, ?)''',
+        #     [data["username"], data["email"], data["pw_hash"]])
+
+        db.execute('''insert into user (username, user_id, email, pw_hash) values(?, ?, ?, ?)''', [data['username'], uuid(), data['email'], data['pw_hash']])
+
         db.commit()
         print 'You were successfully registered'
     return jsonify(data)
@@ -408,12 +419,18 @@ def user_time_line():
         get_credentials_by_user_id(data["user_id"])
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    user = query_db('''select message.*, user.* from message, user
-    where message.author_id = user.user_id and (
-        user.user_id = ? or
-        user.user_id in (select whom_id from follower
-                                where who_id = ?))
-    order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
+    # user = query_db('''select message.*, user.* from message, user
+    # where message.author_id = user.user_id and (
+    #     user.user_id = ? or
+    #     user.user_id in (select whom_id from follower
+    #                             where who_id = ?))
+    # order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
+
+    user = query_db('''select message from message where user_id = ? limit ?''', [data['user_id'], PER_PAGE])
+    whom_id = query_db('''select whom_id from message where user_id = ?''', [data['user_id']])
+    for whom in whom_id:
+        user = user + query_db('''select message from message where user_id = ? limit ?''', [whom, PER_PAGE])
+
     user = map(dict, user)
     return jsonify(user)
 
@@ -423,7 +440,10 @@ def public_time_line():
     '''display latest messages of all users.'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-    messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+    # messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+
+    messages = query_db('''select message from message limit ?''', [PER_PAGE])
+
     messages = map(dict, messages)
     return jsonify(messages)
 
