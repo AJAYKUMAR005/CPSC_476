@@ -32,6 +32,3 @@ create index user_user_id on user(user_id);
 
 drop index if exists mt_api.message_user_id;
 create index message_user_id on message(user_id);
-
--- drop index if exists mt_api.message_username;
--- create index message_username on message(username);
