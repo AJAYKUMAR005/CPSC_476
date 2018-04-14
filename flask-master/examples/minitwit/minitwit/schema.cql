@@ -24,5 +24,14 @@ create table message (
   message text,
   whom_id set<uuid>,
   who_id set<uuid>,
-  primary key ((username, user_id), date)
-);
+  primary key ((username, user_id), date, message)
+) with clustering order by (date desc);
+
+drop index if exists mt_api.user_user_id;
+create index user_user_id on user(user_id);
+
+drop index if exists mt_api.message_user_id;
+create index message_user_id on message(user_id);
+
+-- drop index if exists mt_api.message_username;
+-- create index message_username on message(username);

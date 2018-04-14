@@ -28,8 +28,10 @@ app.config.from_envvar('MINITWIT_SETTINGS', silent=True)
 
 def format_datetime(timestamp):
     """Format a timestamp for display."""
-    return datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d @ %H:%M')
+    return datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d @ %H:%M' )
 
+def formate_timestamp(timestamp):
+    return datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
 def gravatar_url(email, size=80):
     """Return the gravatar image for the given email address."""
@@ -127,7 +129,8 @@ def add_message():
     if 'user_id' not in session:
         abort(401)
     if request.form['text']:
-        payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time())}
+        # payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time())}
+        payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': formate_timestamp((time.time()))}
         url = 'http://localhost:8080/users/' + session['username'] + '/add_message'
         r = requests.post(url, json=payload)
         flash('Your message was recorded')
