@@ -100,9 +100,8 @@ def query_db(query, args=(), one=False):
 
 def get_user_id(username):
     """Convenience method to look up the id for a username."""
-    rv = query_db('select user_id from user where username = ?',
-                  [username], one=True)
-    return rv[0] if rv else None
+    rv = query_db('select user_id from user where username = ?', [username], one=True)
+    return rv['user_id'] if rv else None
 
 
 def get_username(user_id):
@@ -284,12 +283,23 @@ def insert_message(username):
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
-            db = get_db()
-            whom_set = db.execute('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(user_id)])
-            who_set = db.execute('''select who_id from message where user_id = ? limit 1''', [uuid.UUID(user_id)])
-            db.execute('''insert into message (username, user_id, pub_date, text, whom_id, who_id)
-            values (?, ?, ?, ?, ?, ?)''', [data["username"], uuid.UUID(data["author_id"]), formate_timestamp(int(time.time())), data["text"], whom_set, who_set])
-            db.commit()
+            # db = get_db()
+            whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
+            # print whom_set
+            whom_id_set = []
+            for whom_id in whom_set[0]['whom_id']:
+                # print whom_id
+                whom_id_set.append(whom_id)
+            # print whom_id_set
+            who_set = query_db('''select who_id from message where user_id = ? limit 1''', [user_id])
+            who_id_set = []
+            for who_id in who_set[0]['who_id']:
+                print who_id
+                who_id_set.append(who_id)
+            print who_id_set
+            query_db('''insert into message (username, user_id, email, pub_date, text, whom_id, who_id)
+            values (?, ?, ?, ?, ?, ?, ?)''', [data["username"], uuid.UUID(data["user_id"]), data['email'],data['pub_date'], data["text"], whom_id_set, who_id_set])
+            # db.commit()
             print 'Your message was recorded'
         return jsonify(data)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')

@@ -130,7 +130,7 @@ def add_message():
         abort(401)
     if request.form['text']:
         # payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time())}
-        payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': formate_timestamp((time.time()))}
+        payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time()), 'email': session['email']}
         url = 'http://localhost:8080/users/' + session['username'] + '/add_message'
         r = requests.post(url, json=payload)
         flash('Your message was recorded')
@@ -161,6 +161,7 @@ def login():
             session['user_id'] = user['user_id']
             session['pw_hash'] = user['pw_hash']
             session['username'] = user['username']
+            session['email'] = user['email']
             return redirect(url_for('timeline'))
     return render_template('login.html', error=error)
 
