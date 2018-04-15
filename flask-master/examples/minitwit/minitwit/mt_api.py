@@ -9,9 +9,10 @@ from flask import Flask, request, jsonify, g, json, abort, Response, flash, _app
 from flask_basicauth import BasicAuth
 from werkzeug import check_password_hash, generate_password_hash
 from flask_cassandra import CassandraCluster
+from cassandra.query import dict_factory
 
 app = Flask(__name__)
-cassandra_db = CassandraCluster();
+cassandra = CassandraCluster();
 app.config['CASSANDRA_NODES'] = ['127.0.0.1']
 CASSANDRA_NODES = '127.0.0.1'
 # app.config['CASSANDRA_KEYSPACE'] = ['mt_api']
@@ -41,11 +42,11 @@ def get_db():
     current application context.
     """
     top = _app_ctx_stack.top
-    if not hasattr(top, 'cassandra_cluster'):
-        top.cassandra_db = cassandra_db.connect()
-        # top.cassandra_db.execute('drop keyspace if exists mt_api')
-        # top.cassandra_db.execute('create keyspace mt_api with replication = { \'class\' : \'SimpleStrategy\', \'replication_factor\': 3}')
-        # top.cassandra_db.execute('USE mt_api')
+    if not hasattr(top, 'cassandra_db'):
+        print 'break here'
+        top.cassandra_db = cassandra.connect()
+        top.cassandra_db.set_keyspace('mt_api')
+        top.cassandra_db.row_factory = dict_factory
     return top.cassandra_db
 
 
@@ -91,9 +92,11 @@ def initdb_command():
 
 def query_db(query, args=(), one=False):
     """Queries the database and returns a list of dictionaries."""
+    query = get_db().prepare(query)
     cur = get_db().execute(query, args)
-    rv = cur.fetchall()
-    return (rv[0] if rv else None) if one else rv
+    # rv = cur.fetchall()
+    # return (rv[0] if rv else None) if one else rv
+    return (cur[0] if cur else None) if one else cur
 
 
 def get_user_id(username):
@@ -110,17 +113,39 @@ def get_username(user_id):
 
 
 def get_credentials(username):
+    # db = get_db()
+    # query = 'select username from user where username = %s'
+    # user_name = db.execute_async(query, [username])
+    # user_name.fetchall()
+    # print user_name
+
     user_name = query_db('''select username from user where username = ?''', [username], one=True)
+    # query = 'select pw_hash from user where username = %s'
+    # pw_hash = db.execute_async(query, [username])
     pw_hash = query_db('''select pw_hash from user where username = ?''', [username], one=True)
-    app.config['BASIC_AUTH_USERNAME'] = user_name[0]
-    app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
+    app.config['BASIC_AUTH_USERNAME'] = user_name['username']
+    app.config['BASIC_AUTH_PASSWORD'] = pw_hash['pw_hash']
 
 
 def get_credentials_by_user_id(user_id):
-    user_name = query_db('''select username from user where user_id = ?''', [user_id], one=True)
-    pw_hash = query_db('''select pw_hash from user where user_id = ?''', [user_id], one=True)
-    app.config['BASIC_AUTH_USERNAME'] = user_name[0]
-    app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
+    db = get_db()
+    query = db.prepare('select username from mt_api.user where user_id = ?')
+    # user_name = db.execute(query, [uuid.UUID(user_id)])
+    # print user_name[0]['username']
+
+    user_name = query_db('''select username from mt_api.user where user_id = ?''', [uuid.UUID(user_id)], one=True)
+    pw_hash = query_db('''select pw_hash from mt_api.user where user_id = ?''', [uuid.UUID(user_id)], one=True)
+    print user_name
+    print pw_hash
+
+    # query = db.prepare('select pw_hash from mt_api.user where user_id = ?')
+    # pw_hash = db.execute(query, [uuid.UUID(user_id)])
+    # print pw_hash[0]
+    # app.config['BASIC_AUTH_USERNAME'] = user_name[0]['username']
+    # app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]['pw_hash']
+    app.config['BASIC_AUTH_USERNAME'] = user_name['username']
+    app.config['BASIC_AUTH_PASSWORD'] = pw_hash['pw_hash']
+
 
 
 def make_error(status_code, message, reason):
@@ -242,7 +267,7 @@ def user_info(id_or_name):
             return jsonify(user)
     if 'user_id' in data:
         if request.method == 'GET':
-            user = query_db('''select * from user where user_id = ?''', [data['user_id']], one=True)
+            user = query_db('''select * from user where user_id = ?''', [uuid.UUID(data['user_id']]), one=True)
             if user:
                 user = dict(user)
                 return jsonify(user)
@@ -290,76 +315,6 @@ def get_user_messages(username):
         messages = map(dict, messages)
         return jsonify(messages)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
-
-# @app.route('/users/<username1>/follow/<username2>', methods=['POST', 'GET', 'PUT', 'DELETE'])
-# def add_follow_user(username1, username2):
-#     """Adds the username1 as follower of the given username2."""
-#     data = request.get_json()
-#     get_credentials(username1)
-#     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-#         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-#     who_id = get_user_id(username1)
-#     whom_id = get_user_id(username2)
-#     if whom_id is None:
-#         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-#     cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [who_id, whom_id], one=True)
-#     if cur[0] > 0:
-#         return make_error(422, "Unprocessable Entity", "Data duplicated")
-#     if request.method == 'POST':
-#         db = get_db()
-#         db.execute('insert into follower (who_id, whom_id) values (?, ?)', [who_id, whom_id])
-#         db.commit()
-#         print 'You are now following %s' % username2
-#         return jsonify(data)
-#     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
-
-# @app.route('/messages', methods=['POST', 'GET', 'PUT', 'DELETE'])
-# def get_messages():
-#     '''return all messages from all users '''
-#     if request.method != 'GET':
-#         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-#
-#     messages = query_db('''
-#             select message.*, user.* from message, user
-#             where message.author_id = user.user_id
-#             order by message.pub_date desc limit?''', [PER_PAGE])
-#     messages = map(dict, messages)
-#     return jsonify(messages)
-
-
-# @app.route('/messages/<user_id>', methods =['POST', 'GET', 'PUT', 'DELETE'])
-# def get_message_user(user_id):
-#     '''return all messages form the user <user_id>'''
-#     if request.method != 'GET':
-#         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-#     data = request.json
-#     messages = query_db('''
-#         select message.text, user.username from message, user
-#         where message.author_id = user.user_id and user.user_id = ? ''',
-#         [user_id])
-#     messages = map(dict, messages)
-#
-#     return jsonify(messages)
-
-
-# @app.route('/users/<user_id>/followers', methods = ['POST', 'GET', 'PUT', 'DELETE'])
-# def user_followers(user_id):
-#     '''return all users that are followers of the user <user_id>'''
-#     if request.method != 'GET':
-#         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-#     data = request.json
-#     get_credentials_by_user_id(user_id)
-#     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-#         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-#     messages = query_db('''
-#         select u1.username as followee, u2.username as follower from user u1, follower f, user u2
-#         where u1.user_id = f.who_id and u2.user_id = f.whom_id and u1.user_id = ? ''',
-#         [user_id])
-#     messages = map(dict, messages)
-#
-#     return jsonify(messages)
 
 
 @app.route('/users/<user_id>/follow', methods = ['POST', 'GET', 'PUT', 'DELETE'])
@@ -516,10 +471,15 @@ def user_time_line():
     #                             where who_id = ?))
     # order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
 
-    user = query_db('''select message from message where user_id = ? limit ?''', [data['user_id'], PER_PAGE])
+    user = query_db('''select message from message where user_id = ? limit ?''', [uuid.UUID(data['user_id']), PER_PAGE])
     whom_id = query_db('''select whom_id from message where user_id = ?''', [data['user_id']])
     for whom in whom_id:
         user = user + query_db('''select message from message where user_id = ? limit ?''', [whom, PER_PAGE])
+
+    # query = 'select message from message where user_id=%s limit=%d'
+    # user = db.execute_async(query, [data['user_id'], PER_PAGE])
+    print user
+    print 'break'
 
     user = map(dict, user)
     return jsonify(user)
