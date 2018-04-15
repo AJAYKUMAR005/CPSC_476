@@ -20,12 +20,13 @@ drop table if exists mt_api.message;
 create table message (
   user_id uuid,
   username text,
-  date text,
-  message text,
+  email text,
+  pub_date int,
+  text text,
   whom_id set<uuid>,
   who_id set<uuid>,
-  primary key ((username, user_id), date)
-) with clustering order by (date desc);
+  primary key ((username, user_id, email), pub_date)
+) with clustering order by (pub_date desc);
 
 drop index if exists mt_api.user_user_id;
 create index user_user_id on user(user_id);
