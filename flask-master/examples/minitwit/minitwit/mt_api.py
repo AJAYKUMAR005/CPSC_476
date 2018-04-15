@@ -1,6 +1,7 @@
 import minitwit
 import os
 import time
+import uuid
 # from sqlite3 import dbapi2 as sqlite3
 from hashlib import md5
 from datetime import datetime
@@ -10,7 +11,7 @@ from werkzeug import check_password_hash, generate_password_hash
 from flask_cassandra import CassandraCluster
 
 app = Flask(__name__)
-cassandra = CassandraCluster();
+cassandra_db = CassandraCluster();
 app.config['CASSANDRA_NODES'] = ['127.0.0.1']
 CASSANDRA_NODES = '127.0.0.1'
 # app.config['CASSANDRA_KEYSPACE'] = ['mt_api']
@@ -40,14 +41,11 @@ def get_db():
     current application context.
     """
     top = _app_ctx_stack.top
-    if not hasattr(top, 'cassandra_db'):
-        # top.cassandra = cassandra.connect(app.config['127.0.0.1'])
-        top.cassandra_db = cassandra.connect()
-        # top.cassandra_db.row_factory = cassandra.Row
-        # top.cassandra_db.set_keyspace("mt_api")
-        top.cassandra_db.execute('drop keyspace if exists mt_api')
-        top.cassandra_db.execute('create keyspace mt_api with replication = { \'class\' : \'SimpleStrategy\', \'replication_factor\': 3}')
-        top.cassandra_db.execute('USE mt_api')
+    if not hasattr(top, 'cassandra_cluster'):
+        top.cassandra_db = cassandra_db.connect()
+        # top.cassandra_db.execute('drop keyspace if exists mt_api')
+        # top.cassandra_db.execute('create keyspace mt_api with replication = { \'class\' : \'SimpleStrategy\', \'replication_factor\': 3}')
+        # top.cassandra_db.execute('USE mt_api')
     return top.cassandra_db
 
 
@@ -55,7 +53,7 @@ def get_db():
 def close_database(exception):
     """Closes the database again at the end of the request."""
     top = _app_ctx_stack.top
-    if hasattr(top, 'cassandra_db'):
+    if hasattr(top, 'cassandra_cluster'):
         # top.cassandra_db.close()
         top.cassandra_db.shutdown()
 
@@ -64,9 +62,16 @@ def init_db():
     """Initializes the database."""
     db = get_db()
     # with app.open_resource('schema.cql', mode='r') as f:
-    #     db.cursor().executescript(f.read())
-    #     db.execute(f)
+        # db.cursor().executescript(f.read())
+        # db.execute(f)
     # db.commit()
+
+    #create database
+    db.execute('drop keyspace if exists mt_api')
+    db.execute('create keyspace mt_api with replication = { \'class\' : \'SimpleStrategy\', \'replication_factor\': 3}')
+    db.execute('USE mt_api')
+
+    #create table
     db.execute('drop table if exists mt_api.user')
     db.execute('create table user (user_id uuid, username text, email text, pw_hash text, primary key (username, user_id))')
     db.execute('drop table if exists mt_api.message')
@@ -130,9 +135,76 @@ def make_error(status_code, message, reason):
 def populate_db():
     """Re-populates the database with test data"""
     db = get_db()
-    with app.open_resource('population.cql', mode='r') as f:
-        db.cursor().executescript(f.read())
-    db.commit()
+
+    #populate user
+    db.execute(
+        """
+        insert into mt_api.user (user_id, username, email, pw_hash) values (%s, %s, %s, %s)
+        """,
+        (uuid.UUID('{ba4f7e02-a5d1-4c60-9a95-de51142aa51a}'), "thomas", "tngo0508@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
+    )
+    db.execute(
+        """
+        insert into mt_api.user (user_id, username, email, pw_hash) values (%s, %s, %s, %s)
+        """,
+        (uuid.UUID('{c405ae0d-b7f1-44dd-8c95-f442fea668ab}'), "bob", "bob@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
+    )
+    db.execute(
+        """
+        insert into mt_api.user (user_id, username, email, pw_hash) values (%s, %s, %s, %s)
+        """,
+        (uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}'), "eve", "eve@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
+    )
+    db.execute(
+        """
+        insert into mt_api.user (user_id, username, email, pw_hash) values (%s, %s, %s, %s)
+        """,
+        (uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}'), "eve", "tngo0508@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
+    )
+
+    #populate message
+    db.execute(
+        '''
+        insert into mt_api.message (user_id, username, date, message, whom_id, who_id)
+        values (%s, %s, %s, %s, %s, %s)
+        ''',
+        (uuid.UUID('{ba4f7e02-a5d1-4c60-9a95-de51142aa51a}'), 'thomas', '2018-04-14 07:22:28', 'hello world', {uuid.UUID('{c405ae0d-b7f1-44dd-8c95-f442fea668ab}'), uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}')}, {uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}'), uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}')})
+    )
+    db.execute(
+        '''
+        insert into mt_api.message (user_id, username, date, message, whom_id, who_id)
+        values (%s, %s, %s, %s, %s, %s)
+        ''',
+        (uuid.UUID('{ba4f7e02-a5d1-4c60-9a95-de51142aa51a}'), 'thomas', '2018-04-17 06:22:35', 'testing population', {uuid.UUID('{c405ae0d-b7f1-44dd-8c95-f442fea668ab}'), uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}')}, {uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}'), uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}')})
+    )
+    db.execute(
+        '''
+        insert into mt_api.message (user_id, username, date, message, whom_id, who_id)
+        values (%s, %s, %s, %s, %s, %s)
+        ''',
+        (uuid.UUID('{c405ae0d-b7f1-44dd-8c95-f442fea668ab}'), 'bob', '2017-03-14 02:21:38', 'hello from bob', {uuid.UUID('{ba4f7e02-a5d1-4c60-9a95-de51142aa51a}'), uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}')}, {uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}'), uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}')})
+    )
+    db.execute(
+        '''
+        insert into mt_api.message (user_id, username, date, message, whom_id, who_id)
+        values (%s, %s, %s, %s, %s, %s)
+        ''',
+        (uuid.UUID('{c405ae0d-b7f1-44dd-8c95-f442fea668ab}'), 'bob', '2018-04-17 10:00:28', 'testing from bob', {uuid.UUID('{ba4f7e02-a5d1-4c60-9a95-de51142aa51a}'), uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}')}, {uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}'), uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}')})
+    )
+    db.execute(
+        '''
+        insert into mt_api.message (user_id, username, date, message, who_id)
+        values (%s, %s, %s, %s, %s)
+        ''',
+        (uuid.UUID('{cfca912b-eaaa-449f-8162-682289e23e4b}'), 'eve', '2018-04-15 02:29:32', 'backend practice eve', {uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}')})
+    )
+    db.execute(
+        '''
+        insert into mt_api.message (user_id, username, date, message, whom_id)
+        values (%s, %s, %s, %s, %s)
+        ''',
+        (uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}'), 'smith', '2018-04-15 05:29:00', 'hi from smith', {uuid.UUID('{ba4f7e02-a5d1-4c60-9a95-de51142aa51a}'), uuid.UUID('{c405ae0d-b7f1-44dd-8c95-f442fea668ab}')})
+    )
 
 
 @app.cli.command('populatedb')
