@@ -11,6 +11,9 @@ from flask_cassandra import CassandraCluster
 
 app = Flask(__name__)
 cassandra = CassandraCluster();
+app.config['CASSANDRA_NODES'] = ['127.0.0.1']
+CASSANDRA_NODES = '127.0.0.1'
+# app.config['CASSANDRA_KEYSPACE'] = ['mt_api']
 
 # configuration
 # DATABASE = '/tmp/minitwit.db'
@@ -37,26 +40,41 @@ def get_db():
     current application context.
     """
     top = _app_ctx_stack.top
-    if not hasattr(top, 'cassandra'):
-        top.cassandra = cassandra.connect(app.config['DATABASE'])
-        top.cassandra.row_factory = cassandra.Row
-    return top.cassandra
+    if not hasattr(top, 'cassandra_db'):
+        # top.cassandra = cassandra.connect(app.config['127.0.0.1'])
+        top.cassandra_db = cassandra.connect()
+        # top.cassandra_db.row_factory = cassandra.Row
+        # top.cassandra_db.set_keyspace("mt_api")
+        top.cassandra_db.execute('drop keyspace if exists mt_api')
+        top.cassandra_db.execute('create keyspace mt_api with replication = { \'class\' : \'SimpleStrategy\', \'replication_factor\': 3}')
+        top.cassandra_db.execute('USE mt_api')
+    return top.cassandra_db
 
 
 @app.teardown_appcontext
 def close_database(exception):
     """Closes the database again at the end of the request."""
     top = _app_ctx_stack.top
-    if hasattr(top, 'cassandra'):
-        top.cassandra.close()
+    if hasattr(top, 'cassandra_db'):
+        # top.cassandra_db.close()
+        top.cassandra_db.shutdown()
 
 
 def init_db():
     """Initializes the database."""
     db = get_db()
-    with app.open_resource('schema.cql', mode='r') as f:
-        db.cursor().executescript(f.read())
-    db.commit()
+    # with app.open_resource('schema.cql', mode='r') as f:
+    #     db.cursor().executescript(f.read())
+    #     db.execute(f)
+    # db.commit()
+    db.execute('drop table if exists mt_api.user')
+    db.execute('create table user (user_id uuid, username text, email text, pw_hash text, primary key (username, user_id))')
+    db.execute('drop table if exists mt_api.message')
+    db.execute('create table message (user_id uuid, username text, date text, message text, whom_id set<uuid>, who_id set<uuid>, primary key ((username, user_id), date)) with clustering order by (date desc)')
+    db.execute('drop index if exists mt_api.user_user_id')
+    db.execute('create index user_user_id on user(user_id)')
+    db.execute('drop index if exists mt_api.message_user_id')
+    db.execute('create index message_user_id on message(user_id)')
 
 
 @app.cli.command('initdb')
