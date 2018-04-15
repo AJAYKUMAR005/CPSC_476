@@ -44,7 +44,7 @@ def get_db():
     top = _app_ctx_stack.top
     if not hasattr(top, 'cassandra_db'):
         top.cassandra_db = cassandra.connect()
-        top.cassandra_db.set_keyspace('mt_api')
+        top.cassandra_db.set_keyspace(DATABASE)
         top.cassandra_db.row_factory = dict_factory
     return top.cassandra_db
 
@@ -53,7 +53,7 @@ def get_db():
 def close_database(exception):
     """Closes the database again at the end of the request."""
     top = _app_ctx_stack.top
-    if hasattr(top, 'cassandra_cluster'):
+    if hasattr(top, 'cassandra_db'):
         # top.cassandra_db.close()
         top.cassandra_db.shutdown()
 
@@ -103,6 +103,8 @@ def query_db(query, args=(), one=False):
 def get_user_id(username):
     """Convenience method to look up the id for a username."""
     rv = query_db('select user_id from user where username = ?', [username], one=True)
+    # print username
+    # print rv
     return rv['user_id'] if rv else None
 
 
@@ -286,18 +288,23 @@ def insert_message(username):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
             # db = get_db()
+            # print user_id
             whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
             # print whom_set
+            print whom_set[0]['whom_id']
             whom_id_set = []
-            for whom_id in whom_set[0]['whom_id']:
-                # print whom_id
-                whom_id_set.append(whom_id)
+            if whom_set[0]['whom_id']:
+                for whom_id in whom_set[0]['whom_id']:
+                    # print whom_id
+                    whom_id_set.append(whom_id)
             # print whom_id_set
             who_set = query_db('''select who_id from message where user_id = ? limit 1''', [user_id])
             who_id_set = []
-            for who_id in who_set[0]['who_id']:
-                print who_id
-                who_id_set.append(who_id)
+            print who_set[0]['who_id']
+            if who_set[0]['who_id']:
+                for who_id in who_set[0]['who_id']:
+                    print who_id
+                    who_id_set.append(who_id)
             print who_id_set
             query_db('''insert into message (username, user_id, email, pub_date, text, whom_id, who_id)
             values (?, ?, ?, ?, ?, ?, ?)''', [data["username"], uuid.UUID(data["user_id"]), data['email'],data['pub_date'], data["text"], whom_id_set, who_id_set])
@@ -370,14 +377,14 @@ def add_message(user_id):
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Invalid Username ad/or Password')
 
-        db = get_db()
+        # db = get_db()
         # db.execute('''insert into message (author_id, text, pub_date) values (?, ?, ?)''', [data["author_id"], data["text"], data['pub_date']])
 
         whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(user_id)])
         who_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
         db.execute('''insert into message (username, user_id, pub_date, text, whom_set, who_set values(?, ?, ?, ?, ?, ?))''', [data['username'], uuid.UUID(user_id), data['pub_date'], data['text'], whom_set, who_set])
 
-        db.commit()
+        # db.commit()
         print 'Your message was successfully recorded'
     return jsonify(data)
 
@@ -489,12 +496,14 @@ def user_time_line():
     # print user[0]
     whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
     # print whom_id_set[0]['whom_id']
-    for whom_id in whom_id_set[0]['whom_id']:
-        print whom_id
-        message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
-        # print message
-        for elem in message:
-            user.append(elem)
+    print whom_id_set[0]['whom_id']
+    if whom_id_set[0]['whom_id']:
+        for whom_id in whom_id_set[0]['whom_id']:
+            print whom_id
+            message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
+            # print message
+            for elem in message:
+                user.append(elem)
 
     # query = 'select message from message where user_id=%s limit=%d'
     # user = db.execute_async(query, [data['user_id'], PER_PAGE])
