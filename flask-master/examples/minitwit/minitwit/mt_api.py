@@ -80,6 +80,8 @@ def init_db():
     db.execute('create index user_user_id on user(user_id)')
     db.execute('drop index if exists mt_api.message_user_id')
     db.execute('create index message_user_id on message(user_id)')
+    db.execute('drop index if exists mt_api.message_username')
+    db.execute('create index message_username on message(username)')
 
 
 @app.cli.command('initdb')
@@ -182,7 +184,7 @@ def populate_db():
         """
         insert into mt_api.user (user_id, username, email, pw_hash) values (%s, %s, %s, %s)
         """,
-        (uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}'), "eve", "tngo0508@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
+        (uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}'), "smith", "smith@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
     )
 
     #populate message
@@ -319,9 +321,12 @@ def get_user_messages(username):
         # messages = query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
         # [profile_user['user_id'], PER_PAGE])
 
-        messages = query_db('''select * from message where username = ? and user_id = ? order by pub_date desc limit ?''', [username, uuid.UUID(profile_user['user_id']), PER_PAGE])
-
+        messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
+        # for message in messages:
+        #     print message['who_id']
+        #     print 'break'
         messages = map(dict, messages)
+        # print messages
         return jsonify(messages)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
@@ -339,13 +344,13 @@ def user_follow(user_id):
     #                     select 1 from follower
     #                     where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
 
-    messages = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(data['user_id'])], one=True)
-
-    if messages:
-        return jsonify(messages[0])
-    else:
-        return jsonify(messages)
-
+    whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(data['user_id'])], one=True)
+    # print whom_set['whom_id']
+    whom_id_set = []
+    for whom_id in whom_set['whom_id']:
+        whom_id_set.append(whom_id)
+    print whom_id_set
+    return jsonify(whom_id_set)
 
 @app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
 def add_message(user_id):
