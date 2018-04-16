@@ -336,12 +336,16 @@ def get_user_messages(username):
         # [profile_user['user_id'], PER_PAGE])
 
         messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
-        # for message in messages:
-        #     print message['who_id']
-        #     print 'break'
-        messages = map(dict, messages)
+        text = []
+        for message in messages:
+            print message
+            if message['text'] is None:
+                # del message['text']
+                messages.remove(message)
+        # messages = map(dict, messages)
         # print messages
         return jsonify(messages)
+        # return jsonify(text)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
 
@@ -362,10 +366,12 @@ def user_follow(user_id):
     print whom_set
     # print whom_set['whom_id']
     whom_id_set = []
-    if whom_set['whom_id']:
+    if whom_set:
         for whom_id in whom_set['whom_id']:
             whom_id_set.append(whom_id)
         print whom_id_set
+    else:
+        whom_id_set = None
     return jsonify(whom_id_set)
 
 @app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -411,19 +417,13 @@ def add_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        # '''Check duplicate'''
-        # cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
-        # if cur[0] > 0:
-        #     return make_error(422, "Unprocessable Entity", "Data duplicated")
-        db = get_db()
-        # db.execute('''insert into follower (who_id, whom_id)
-        #     values (?, ?)''',
-        #     [user_id, data["whom_id"]])
+        date = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
+        print date
+        if date:
+            query_db('''update message set whom_id = whom_id + { ? } where username = ? and user_id = ? and pub_date in (?)''', [uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), date])
+        else:
+            query_db('''insert into message (username, user_id, email, pub_date, whom_id) values (?, ?, ?, ?, ?)''', [data['username'], uuid.UUID(user_id), data['email'], data['pub_date'], {uuid.UUID(data['whom_id'])}])
 
-        date = query_db('''select date from message where user_id = ?''', [uuid.UUID(user_id)])
-        db.execute('''update message set who_id = who_id + { ? } where username = ? and user_id = ? and pub_date in (?)''', [uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), date])
-
-        db.commit()
         print 'You are following user has user_id ', data['whom_id']
     return jsonify(data)
 
@@ -445,15 +445,15 @@ def remove_follow(user_id):
         # cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
         # if cur[0] == 0:
         #     return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-        db = get_db()
+        # db = get_db()
         # db.execute('''delete from follower
         # where who_id = ? and whom_id = ?''',
         #  [user_id, data["whom_id"]])
 
-        date = query_db('''select date from message where user_id = ?''', [uuid.UUID(user_id)])
-        db.execute('''update message set who_id = who_id - { ? } where username = ? and user_id = ? and pub_date in (?)''', [uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), date])
+        date = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
+        query_db('''update message set who_id = who_id - { ? } where username = ? and user_id = ? and pub_date in (?)''', [uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), date])
 
-        db.commit()
+        # db.commit()
         print 'You are no longer following user has ', data["whom_id"]
     return jsonify(data)
 
@@ -505,8 +505,7 @@ def user_time_line():
     user = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [uuid.UUID(data['user_id']), PER_PAGE])
     # print user[0]
     whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
-    print whom_id_set
-    print "break here"
+    # print whom_id_set
 
     if 'whom_id'in whom_id_set:
         for whom_id in whom_id_set[0]['whom_id']:
@@ -516,11 +515,12 @@ def user_time_line():
             for elem in message:
                 user.append(elem)
 
-    # query = 'select message from message where user_id=%s limit=%d'
-    # user = db.execute_async(query, [data['user_id'], PER_PAGE])
-    print user
-
-    user = map(dict, user)
+    # print len(user)
+    for elem in user:
+        if elem['text'] is None:
+            # del elem['text']
+            user.remove(elem)
+    # user = map(dict, user)
     return jsonify(user)
 
 
@@ -532,6 +532,13 @@ def public_time_line():
     # messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
 
     messages = query_db('''select text, username, email, pub_date from message limit ?''', [PER_PAGE])
+
+    for message in messages:
+        if message['text'] is None:
+            messages.remove(message)
+            # del message['username']
+            # del message['email']
+            # del message['pub_date']
 
     messages = map(dict, messages)
     return jsonify(messages)
