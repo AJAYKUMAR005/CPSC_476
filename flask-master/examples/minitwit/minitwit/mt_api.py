@@ -377,7 +377,7 @@ def user_follow(user_id):
     print whom_set
     # print whom_set['whom_id']
     whom_id_set = []
-    if whom_set:
+    if whom_set['whom_id']:
         for whom_id in whom_set['whom_id']:
             whom_id_set.append(whom_id)
         print whom_id_set
@@ -519,13 +519,14 @@ def user_time_line():
     whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
     # print whom_id_set
 
-    if 'whom_id'in whom_id_set[0]:
-        for whom_id in whom_id_set[0]['whom_id']:
-            print whom_id
-            message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
-            # print message
-            for elem in message:
-                user.append(elem)
+    if whom_id_set[0]['whom_id']:
+        if 'whom_id' in whom_id_set[0]:
+            for whom_id in whom_id_set[0]['whom_id']:
+                print whom_id
+                message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
+                # print message
+                for elem in message:
+                    user.append(elem)
 
     # print len(user)
     for elem in user:
