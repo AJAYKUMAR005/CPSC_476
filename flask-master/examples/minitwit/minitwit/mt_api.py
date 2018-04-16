@@ -102,6 +102,7 @@ def query_db(query, args=(), one=False):
 
 def get_user_id(username):
     """Convenience method to look up the id for a username."""
+    print username
     rv = query_db('select user_id from user where username = ?', [username], one=True)
     # print username
     # print rv
@@ -460,14 +461,15 @@ def Sign_up():
     data = request.get_json()
     print data
     if data:
-        db = get_db()
+        # db = get_db()
         # db.execute('''insert into user (username, email, pw_hash)
         #     values (?, ?, ?)''',
         #     [data["username"], data["email"], data["pw_hash"]])
 
-        db.execute('''insert into user (username, user_id, email, pw_hash) values(?, ?, ?, ?)''', [data['username'], uuid.uuid1(), data['email'], data['pw_hash']])
+        print uuid.uuid1()
+        query_db('''insert into user (username, user_id, email, pw_hash) values(?, ?, ?, ?)''', [data['username'], uuid.uuid1(), data['email'], data['pw_hash']])
 
-        db.commit()
+        # db.commit()
         print 'You were successfully registered'
     return jsonify(data)
 

@@ -16,12 +16,16 @@ from datetime import datetime
 from flask import Flask, request, session, url_for, redirect, \
      render_template, abort, g, flash, _app_ctx_stack
 from werkzeug import check_password_hash, generate_password_hash
+from flask_cassandra import CassandraCluster
 
 
 SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
 
 # create our little application :)
 app = Flask('minitwit')
+cassandra = CassandraCluster();
+app.config['CASSANDRA_NODES'] = ['127.0.0.1']
+CASSANDRA_NODES = '127.0.0.1'
 app.config.from_object(__name__)
 app.config.from_envvar('MINITWIT_SETTINGS', silent=True)
 
