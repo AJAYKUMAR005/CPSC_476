@@ -382,12 +382,17 @@ def user_follow(user_id):
     # print whom_set['whom_id']
     whom_id_set = []
     if whom_set:
-        if whom_set['whom_id']:
-            for whom_id in whom_set['whom_id']:
-                whom_id_set.append(whom_id)
-            print whom_id_set
+        if whom_set[0]:
+            if whom_set['whom_id']:
+                for whom_id in whom_set['whom_id']:
+                    whom_id_set.append(whom_id)
+                print whom_id_set
+            else:
+                whom_id_set = None
         else:
             whom_id_set = None
+    else:
+        whom_id_set = None
     return jsonify(whom_id_set)
 
 @app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -458,10 +463,6 @@ def remove_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        # '''Check who_id and whom_id existing'''
-        # cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
-        # if cur[0] == 0:
-        #     return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
         # db = get_db()
         # db.execute('''delete from follower
         # where who_id = ? and whom_id = ?''',
