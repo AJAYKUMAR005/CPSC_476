@@ -382,18 +382,21 @@ def user_follow(user_id):
     # print whom_set['whom_id']
     whom_id_set = []
     if whom_set:
-        if whom_set[0]:
+        if 'whom_id' in whom_set:
             if whom_set['whom_id']:
                 for whom_id in whom_set['whom_id']:
                     whom_id_set.append(whom_id)
-                print whom_id_set
-            else:
-                whom_id_set = None
-        else:
-            whom_id_set = None
-    else:
-        whom_id_set = None
-    return jsonify(whom_id_set)
+                # print whom_id_set
+    print whom_id_set
+    print data['profile_user_id']
+    if whom_id_set:
+        for whom_id in whom_id_set:
+            print whom_id
+            if uuid.UUID(data['profile_user_id']) == whom_id:
+                print 'break'
+                return jsonify(1)
+
+    return jsonify(None)
 
 @app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
 def add_message(user_id):
