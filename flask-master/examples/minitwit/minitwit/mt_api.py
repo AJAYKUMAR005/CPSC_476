@@ -328,6 +328,7 @@ def get_user_messages(username):
     if profile_user is None:
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     data = request.get_json()
+    user_id = get_user_id(username)
     get_credentials(data["username"])
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
@@ -336,16 +337,26 @@ def get_user_messages(username):
         # [profile_user['user_id'], PER_PAGE])
 
         messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
-        text = []
+
+        whom_id_set = query_db('''select whom_id from message where user_id = ?''', [user_id])
+        print whom_id_set[0]
+        print 'break here'
+
+        if whom_id_set[0]['whom_id']:
+            if 'whom_id'in whom_id_set[0]:
+                for whom_id in whom_id_set[0]['whom_id']:
+                    print whom_id
+                    message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
+                    for elem in message:
+                        messages.append(elem)
+
         for message in messages:
-            print message
+            # print message
             if message['text'] is None:
-                # del message['text']
                 messages.remove(message)
         # messages = map(dict, messages)
         # print messages
         return jsonify(messages)
-        # return jsonify(text)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
 
@@ -425,6 +436,7 @@ def add_follow(user_id):
             query_db('''insert into message (username, user_id, email, pub_date, whom_id) values (?, ?, ?, ?, ?)''', [data['username'], uuid.UUID(user_id), data['email'], data['pub_date'], {uuid.UUID(data['whom_id'])}])
 
         print 'You are following user has user_id ', data['whom_id']
+    print data
     return jsonify(data)
 
 
@@ -507,7 +519,7 @@ def user_time_line():
     whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
     # print whom_id_set
 
-    if 'whom_id'in whom_id_set:
+    if 'whom_id'in whom_id_set[0]:
         for whom_id in whom_id_set[0]['whom_id']:
             print whom_id
             message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
