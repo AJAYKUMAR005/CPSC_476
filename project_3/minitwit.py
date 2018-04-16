@@ -121,7 +121,6 @@ def unfollow_user(username):
     whom_id = mt_api.get_user_id(username)
     if whom_id is None:
         abort(404)
-    # payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': whom_id, 'email': session['email'], 'pub_date': int(time.time())}
     payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': str(whom_id), 'email': session['email'], 'pub_date': int(time.time())}
     url = 'http://localhost:8080/users/' + str(session['user_id']) + '/unfollow'
     r = requests.delete(url, json=payload)
@@ -135,7 +134,6 @@ def add_message():
     if 'user_id' not in session:
         abort(401)
     if request.form['text']:
-        # payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time())}
         payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time()), 'email': session['email']}
         url = 'http://localhost:8080/users/' + session['username'] + '/add_message'
         r = requests.post(url, json=payload)

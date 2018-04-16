@@ -53,17 +53,12 @@ def close_database(exception):
     """Closes the database again at the end of the request."""
     top = _app_ctx_stack.top
     if hasattr(top, 'cassandra_db'):
-        # top.cassandra_db.close()
         top.cassandra_db.shutdown()
 
 
 def init_db():
     """Initializes the database."""
     db = get_db()
-    # with app.open_resource('schema.cql', mode='r') as f:
-        # db.cursor().executescript(f.read())
-        # db.execute(f)
-    # db.commit()
 
     #create database
     db.execute('drop keyspace if exists mt_api')
@@ -96,15 +91,12 @@ def query_db(query, args=(), one=False):
     cur = get_db().execute(query, args)
     rv = cur[:]
     return (rv[0] if rv else None) if one else rv
-    # return (cur[0] if cur else None) if one else cur
 
 
 def get_user_id(username):
     """Convenience method to look up the id for a username."""
     print username
     rv = query_db('select user_id from user where username = ?', [username], one=True)
-    # print username
-    # print rv
     return rv['user_id'] if rv else None
 
 
@@ -248,7 +240,6 @@ def user_info(id_or_name):
         if request.method == 'GET':
             user = query_db('''select * from user where username = ?''', [data['username']], one=True)
             print user
-            # user = map(dict, user)
             if user:
                 user = dict(user)
                 return jsonify(user)
@@ -341,16 +332,12 @@ def user_follow(user_id):
 
     whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(data['user_id'])], one=True)
     print whom_set
-    # print whom_set['whom_id']
     whom_id_set = []
     if whom_set:
         if 'whom_id' in whom_set:
             if whom_set['whom_id']:
                 for whom_id in whom_set['whom_id']:
                     whom_id_set.append(whom_id)
-                # print whom_id_set
-    print whom_id_set
-    print data['profile_user_id']
     if whom_id_set:
         for whom_id in whom_id_set:
             print whom_id
