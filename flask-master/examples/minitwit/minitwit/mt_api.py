@@ -189,6 +189,12 @@ def populate_db():
         """,
         (uuid.UUID('{d68a329e-caac-4114-8e0b-e3be895fb538}'), "smith", "smith@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
     )
+    db.execute(
+        """
+        insert into mt_api.user (user_id, username, email, pw_hash) values (%s, %s, %s, %s)
+        """,
+        (uuid.UUID('{304c9b29-4126-11e8-ae9a-9cb6d012d2ed}'), "admin", "admin@gmail.com", "pbkdf2:sha256:50000$r1fUXyrZ$5908841c968862270f5a49550fa46d188680922d2c9c3e571f75fa248034d09d")
+    )
 
     #populate message
     db.execute(
@@ -292,17 +298,17 @@ def insert_message(username):
             # print user_id
             whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
             # print whom_set
-            print whom_set[0]['whom_id']
+            # print whom_set[0]['whom_id']
             whom_id_set = []
-            if whom_set[0]['whom_id']:
+            if 'whom_id' in whom_set:
                 for whom_id in whom_set[0]['whom_id']:
                     # print whom_id
                     whom_id_set.append(whom_id)
             # print whom_id_set
             who_set = query_db('''select who_id from message where user_id = ? limit 1''', [user_id])
             who_id_set = []
-            print who_set[0]['who_id']
-            if who_set[0]['who_id']:
+            # print who_set[0]['who_id']
+            if 'who_id' in who_set:
                 for who_id in who_set[0]['who_id']:
                     print who_id
                     who_id_set.append(who_id)
@@ -353,11 +359,13 @@ def user_follow(user_id):
     #                     where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
 
     whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(data['user_id'])], one=True)
+    print whom_set
     # print whom_set['whom_id']
     whom_id_set = []
-    for whom_id in whom_set['whom_id']:
-        whom_id_set.append(whom_id)
-    print whom_id_set
+    if whom_set['whom_id']:
+        for whom_id in whom_set['whom_id']:
+            whom_id_set.append(whom_id)
+        print whom_id_set
     return jsonify(whom_id_set)
 
 @app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -497,9 +505,10 @@ def user_time_line():
     user = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [uuid.UUID(data['user_id']), PER_PAGE])
     # print user[0]
     whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
-    # print whom_id_set[0]['whom_id']
-    print whom_id_set[0]['whom_id']
-    if whom_id_set[0]['whom_id']:
+    print whom_id_set
+    print "break here"
+
+    if 'whom_id'in whom_id_set:
         for whom_id in whom_id_set[0]['whom_id']:
             print whom_id
             message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
