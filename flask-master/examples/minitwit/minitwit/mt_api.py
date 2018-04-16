@@ -116,34 +116,19 @@ def get_username(user_id):
 
 
 def get_credentials(username):
-    # db = get_db()
-    # query = 'select username from user where username = %s'
-    # user_name = db.execute_async(query, [username])
-    # user_name.fetchall()
-    # print user_name
-
     user_name = query_db('''select username from user where username = ?''', [username], one=True)
-    # query = 'select pw_hash from user where username = %s'
-    # pw_hash = db.execute_async(query, [username])
     pw_hash = query_db('''select pw_hash from user where username = ?''', [username], one=True)
     app.config['BASIC_AUTH_USERNAME'] = user_name['username']
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash['pw_hash']
 
 
 def get_credentials_by_user_id(user_id):
-    # db = get_db()
-    # query = db.prepare('select username from mt_api.user where user_id = ?')
-    # user_name = db.execute(query, [uuid.UUID(user_id)])
-    # print user_name[0]['username']
-    # print user_id
-
     user_name = query_db('''select username from mt_api.user where user_id = ?''', [uuid.UUID(user_id)], one=True)
     pw_hash = query_db('''select pw_hash from mt_api.user where user_id = ?''', [uuid.UUID(user_id)], one=True)
     print user_name
     print pw_hash
     app.config['BASIC_AUTH_USERNAME'] = user_name['username']
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash['pw_hash']
-
 
 
 def make_error(status_code, message, reason):
@@ -289,20 +274,13 @@ def insert_message(username):
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
-            # db = get_db()
-            # print user_id
             whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
-            # print whom_set
-            # print whom_set[0]['whom_id']
             whom_id_set = []
             if 'whom_id' in whom_set:
                 for whom_id in whom_set[0]['whom_id']:
-                    # print whom_id
                     whom_id_set.append(whom_id)
-            # print whom_id_set
             who_set = query_db('''select who_id from message where user_id = ? limit 1''', [user_id])
             who_id_set = []
-            # print who_set[0]['who_id']
             if 'who_id' in who_set:
                 for who_id in who_set[0]['who_id']:
                     print who_id
@@ -310,7 +288,6 @@ def insert_message(username):
             print who_id_set
             query_db('''insert into message (username, user_id, email, pub_date, text, whom_id, who_id)
             values (?, ?, ?, ?, ?, ?, ?)''', [data["username"], uuid.UUID(data["user_id"]), data['email'],data['pub_date'], data["text"], whom_id_set, who_id_set])
-            # db.commit()
             print 'Your message was recorded'
         return jsonify(data)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
@@ -328,9 +305,6 @@ def get_user_messages(username):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
-        # messages = query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
-        # [profile_user['user_id'], PER_PAGE])
-
         if username in data:
             messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
 
@@ -350,11 +324,8 @@ def get_user_messages(username):
 
 
         for message in messages:
-            # print message
             if message['text'] is None:
                 messages.remove(message)
-        # messages = map(dict, messages)
-        # print messages
         return jsonify(messages)
     return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
 
@@ -368,9 +339,6 @@ def user_follow(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    # messages = query_db('''
-    #                     select 1 from follower
-    #                     where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
 
     whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(data['user_id'])], one=True)
     print whom_set
@@ -411,14 +379,10 @@ def add_message(user_id):
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Invalid Username ad/or Password')
 
-        # db = get_db()
-        # db.execute('''insert into message (author_id, text, pub_date) values (?, ?, ?)''', [data["author_id"], data["text"], data['pub_date']])
-
         whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(user_id)])
         who_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
         db.execute('''insert into message (username, user_id, pub_date, text, whom_set, who_set values(?, ?, ?, ?, ?, ?))''', [data['username'], uuid.UUID(user_id), data['pub_date'], data['text'], whom_set, who_set])
 
-        # db.commit()
         print 'Your message was successfully recorded'
     return jsonify(data)
 
@@ -437,15 +401,12 @@ def add_follow(user_id):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
         date_set = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
-        # print date_set
         pub_date = []
         for date in date_set:
             pub_date.append(date['pub_date'])
-        # print pub_date
         db = get_db()
         if date_set:
             for current in pub_date:
-            # db.execute('''update message set whom_id = whom_id + { %s } where username = %s and user_id = %s and email = %s and pub_date in (%s)''', (uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), data['email'], int(pub_date[0])))
                 db.execute('''update message set whom_id = whom_id + { %s } where username = %s and user_id = %s and email = %s and pub_date in (%s)''', (uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), data['email'], int(current)))
         else:
             query_db('''insert into message (username, user_id, email, pub_date, whom_id) values (?, ?, ?, ?, ?)''', [data['username'], uuid.UUID(user_id), data['email'], data['pub_date'], {uuid.UUID(data['whom_id'])}])
@@ -470,11 +431,9 @@ def remove_follow(user_id):
 
     if data:
         date_set = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
-        # print date_set
         pub_date = []
         for date in date_set:
             pub_date.append(date['pub_date'])
-        # print pub_date
         db = get_db()
         if date_set:
             for current in pub_date:
@@ -494,15 +453,9 @@ def Sign_up():
     data = request.get_json()
     print data
     if data:
-        # db = get_db()
-        # db.execute('''insert into user (username, email, pw_hash)
-        #     values (?, ?, ?)''',
-        #     [data["username"], data["email"], data["pw_hash"]])
-
         print uuid.uuid1()
         query_db('''insert into user (username, user_id, email, pw_hash) values(?, ?, ?, ?)''', [data['username'], uuid.uuid1(), data['email'], data['pw_hash']])
 
-        # db.commit()
         print 'You were successfully registered'
     return jsonify(data)
 
@@ -520,17 +473,9 @@ def user_time_line():
         get_credentials_by_user_id(data["user_id"])
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    # user = query_db('''select message.*, user.* from message, user
-    # where message.author_id = user.user_id and (
-    #     user.user_id = ? or
-    #     user.user_id in (select whom_id from follower
-    #                             where who_id = ?))
-    # order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
 
         user = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [uuid.UUID(data['user_id']), PER_PAGE])
-        # print user[0]
         whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
-        # print whom_id_set
 
         if whom_id_set:
             if whom_id_set[0]['whom_id']:
@@ -538,18 +483,14 @@ def user_time_line():
                     for whom_id in whom_id_set[0]['whom_id']:
                         print whom_id
                         message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
-                        # print message
                         for elem in message:
                             user.append(elem)
     else:
         messages = query_db('''select text, username, email, pub_date from message limit ?''', [PER_PAGE])
 
-    # print len(user)
     for elem in user:
         if elem['text'] is None:
-            # del elem['text']
             user.remove(elem)
-    # user = map(dict, user)
     return jsonify(user)
 
 
@@ -558,18 +499,13 @@ def public_time_line():
     '''display latest messages of all users.'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-    # messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
 
     messages = query_db('''select text, username, email, pub_date from message limit ?''', [PER_PAGE])
 
     for message in messages:
         if message['text'] is None:
             messages.remove(message)
-            # del message['username']
-            # del message['email']
-            # del message['pub_date']
 
-    messages = map(dict, messages)
     return jsonify(messages)
 
 
