@@ -467,16 +467,18 @@ def remove_follow(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
+
     if data:
-        # db = get_db()
-        # db.execute('''delete from follower
-        # where who_id = ? and whom_id = ?''',
-        #  [user_id, data["whom_id"]])
-
-        date = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
-        query_db('''update message set who_id = who_id - { ? } where username = ? and user_id = ? and pub_date in (?)''', [uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), date])
-
-        # db.commit()
+        date_set = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
+        # print date_set
+        pub_date = []
+        for date in date_set:
+            pub_date.append(date['pub_date'])
+        # print pub_date
+        db = get_db()
+        if date_set:
+            for current in pub_date:
+                db.execute('''update message set whom_id = whom_id - { %s } where username = %s and user_id = %s and email = %s and pub_date in (%s)''', (uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), data['email'], int(current)))
         print 'You are no longer following user has ', data["whom_id"]
     return jsonify(data)
 
