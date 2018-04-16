@@ -336,19 +336,23 @@ def get_user_messages(username):
         # messages = query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
         # [profile_user['user_id'], PER_PAGE])
 
-        messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
+        if username in data:
+            messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
 
-        whom_id_set = query_db('''select whom_id from message where user_id = ?''', [user_id])
-        print whom_id_set[0]
-        print 'break here'
+            whom_id_set = query_db('''select whom_id from message where user_id = ?''', [user_id])
+            print whom_id_set[0]
+            print 'break here'
 
-        if whom_id_set[0]['whom_id']:
-            if 'whom_id'in whom_id_set[0]:
-                for whom_id in whom_id_set[0]['whom_id']:
-                    print whom_id
-                    message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
-                    for elem in message:
-                        messages.append(elem)
+            if whom_id_set[0]['whom_id']:
+                if 'whom_id'in whom_id_set[0]:
+                    for whom_id in whom_id_set[0]['whom_id']:
+                        print whom_id
+                        message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
+                        for elem in message:
+                            messages.append(elem)
+        else:
+            messages = query_db('''select username, user_id, pub_date, text, email from message where username = ? limit ?''', [username ,PER_PAGE])
+
 
         for message in messages:
             # print message
@@ -515,20 +519,22 @@ def user_time_line():
     #                             where who_id = ?))
     # order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
 
-    user = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [uuid.UUID(data['user_id']), PER_PAGE])
-    # print user[0]
-    whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
-    # print whom_id_set
+        user = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [uuid.UUID(data['user_id']), PER_PAGE])
+        # print user[0]
+        whom_id_set = query_db('''select whom_id from message where user_id = ?''', [uuid.UUID(data['user_id'])])
+        # print whom_id_set
 
-    if whom_id_set:
-        if whom_id_set[0]['whom_id']:
-            if 'whom_id' in whom_id_set[0]:
-                for whom_id in whom_id_set[0]['whom_id']:
-                    print whom_id
-                    message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
-                    # print message
-                    for elem in message:
-                        user.append(elem)
+        if whom_id_set:
+            if whom_id_set[0]['whom_id']:
+                if 'whom_id' in whom_id_set[0]:
+                    for whom_id in whom_id_set[0]['whom_id']:
+                        print whom_id
+                        message = query_db('''select text, username, email, pub_date from message where user_id = ? limit ?''', [whom_id, PER_PAGE])
+                        # print message
+                        for elem in message:
+                            user.append(elem)
+    else:
+        messages = query_db('''select text, username, email, pub_date from message limit ?''', [PER_PAGE])
 
     # print len(user)
     for elem in user:
