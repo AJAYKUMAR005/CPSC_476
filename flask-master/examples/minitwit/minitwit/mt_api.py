@@ -131,21 +131,16 @@ def get_credentials(username):
 
 
 def get_credentials_by_user_id(user_id):
-    db = get_db()
-    query = db.prepare('select username from mt_api.user where user_id = ?')
+    # db = get_db()
+    # query = db.prepare('select username from mt_api.user where user_id = ?')
     # user_name = db.execute(query, [uuid.UUID(user_id)])
     # print user_name[0]['username']
+    # print user_id
 
     user_name = query_db('''select username from mt_api.user where user_id = ?''', [uuid.UUID(user_id)], one=True)
     pw_hash = query_db('''select pw_hash from mt_api.user where user_id = ?''', [uuid.UUID(user_id)], one=True)
-    # print user_name
-    # print pw_hash
-    #
-    # query = db.prepare('select pw_hash from mt_api.user where user_id = ?')
-    # pw_hash = db.execute(query, [uuid.UUID(user_id)])
-    # print pw_hash[0]
-    # app.config['BASIC_AUTH_USERNAME'] = user_name[0]['username']
-    # app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]['pw_hash']
+    print user_name
+    print pw_hash
     app.config['BASIC_AUTH_USERNAME'] = user_name['username']
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash['pw_hash']
 
@@ -441,10 +436,17 @@ def add_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        date = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
-        print date
-        if date:
-            query_db('''update message set whom_id = whom_id + { ? } where username = ? and user_id = ? and pub_date in (?)''', [uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), date])
+        date_set = query_db('''select pub_date from message where user_id = ?''', [uuid.UUID(user_id)])
+        # print date_set
+        pub_date = []
+        for date in date_set:
+            pub_date.append(date['pub_date'])
+        # print pub_date
+        db = get_db()
+        if date_set:
+            for current in pub_date:
+            # db.execute('''update message set whom_id = whom_id + { %s } where username = %s and user_id = %s and email = %s and pub_date in (%s)''', (uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), data['email'], int(pub_date[0])))
+                db.execute('''update message set whom_id = whom_id + { %s } where username = %s and user_id = %s and email = %s and pub_date in (%s)''', (uuid.UUID(data['whom_id']), data['username'], uuid.UUID(user_id), data['email'], int(current)))
         else:
             query_db('''insert into message (username, user_id, email, pub_date, whom_id) values (?, ?, ?, ?, ?)''', [data['username'], uuid.UUID(user_id), data['email'], data['pub_date'], {uuid.UUID(data['whom_id'])}])
 
