@@ -269,9 +269,12 @@ def insert_message(username):
             print whom_set
             whom_id_set = []
             if whom_set:
-                if 'whom_id' in whom_set[0]:
-                    for whom_id in whom_set[0]['whom_id']:
-                        whom_id_set.append(whom_id)
+                if whom_set[0]:
+                    if 'whom_id' in whom_set[0]:
+                        if whom_set[0]['whom_id']:
+                            for whom_id in whom_set[0]['whom_id']:
+                                whom_id_set.append(whom_id)
+
             print "whom_id_set"
             print whom_id_set
             who_set = query_db('''select who_id from message where user_id = ? limit 1''', [user_id])
@@ -279,10 +282,12 @@ def insert_message(username):
             print who_set
             who_id_set = []
             if who_set:
-                if 'who_id' in who_set[0]:
-                    for who_id in who_set[0]['who_id']:
-                        print who_id
-                        who_id_set.append(who_id)
+                if who_set[0]:
+                    if 'who_id' in who_set[0]:
+                        if who_set[0]['who_id']:
+                            for who_id in who_set[0]['who_id']:
+                                who_id_set.append(who_id)
+
             print "who_id_set"
             print who_id_set
             query_db('''insert into message (username, user_id, email, pub_date, text, whom_id, who_id)
