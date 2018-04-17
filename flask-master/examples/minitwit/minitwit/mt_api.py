@@ -58,7 +58,7 @@ def close_database(exception):
 
 def init_db():
     """Initializes the database."""
-    db = get_db()
+    db = cassandra.connect()
 
     #create database
     db.execute('drop keyspace if exists mt_api')
