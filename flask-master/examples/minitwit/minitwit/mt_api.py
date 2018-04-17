@@ -265,16 +265,25 @@ def insert_message(username):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
             whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
+            print "whom_set"
+            print whom_set
             whom_id_set = []
-            if 'whom_id' in whom_set:
-                for whom_id in whom_set[0]['whom_id']:
-                    whom_id_set.append(whom_id)
+            if whom_set:
+                if 'whom_id' in whom_set[0]:
+                    for whom_id in whom_set[0]['whom_id']:
+                        whom_id_set.append(whom_id)
+            print "whom_id_set"
+            print whom_id_set
             who_set = query_db('''select who_id from message where user_id = ? limit 1''', [user_id])
+            print "who_set"
+            print who_set
             who_id_set = []
-            if 'who_id' in who_set:
-                for who_id in who_set[0]['who_id']:
-                    print who_id
-                    who_id_set.append(who_id)
+            if who_set:
+                if 'who_id' in who_set[0]:
+                    for who_id in who_set[0]['who_id']:
+                        print who_id
+                        who_id_set.append(who_id)
+            print "who_id_set"
             print who_id_set
             query_db('''insert into message (username, user_id, email, pub_date, text, whom_id, who_id)
             values (?, ?, ?, ?, ?, ?, ?)''', [data["username"], uuid.UUID(data["user_id"]), data['email'],data['pub_date'], data["text"], whom_id_set, who_id_set])
