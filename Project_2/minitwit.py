@@ -86,7 +86,7 @@ def user_timeline(username):
         url = 'http://localhost:8080/users/' + str(session['user_id']) + '/follow'
         r = requests.get(url, json=payload)
         followed = r.json() is not None
-    payload = {'pw_hash': session['pw_hash'], 'username': session['username'], 'profile_user_id': profile_user['user_id']}
+    payload = {'profile_user_id': profile_user['user_id']}
     url = 'http://localhost:8080/users/' + profile_user['username'] + '/messages'
     r = requests.get(url, json=payload)
     return render_template('timeline.html', messages = r.json(), followed=followed, profile_user=profile_user)

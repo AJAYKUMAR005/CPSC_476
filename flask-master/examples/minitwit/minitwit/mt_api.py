@@ -344,31 +344,6 @@ def user_follow(user_id):
 
     return jsonify(None)
 
-@app.route('/messages/<user_id>/add_message', methods=['POST', 'GET', 'PUT', 'DELETE'])
-def add_message(user_id):
-    '''Insert a message into table message: json data: author_id, text'''
-    if not request.json:
-        return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
-    if request.method != 'POST':
-        return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-
-    data = request.json
-    get_credentials_by_user_id(user_id)
-    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    if data:
-        username = get_username(user_id)
-        get_credentials(username)
-        if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-            return make_error(401, 'Unauthorized', 'Invalid Username ad/or Password')
-
-        whom_set = query_db('''select whom_id from message where user_id = ? limit 1''', [uuid.UUID(user_id)])
-        who_set = query_db('''select whom_id from message where user_id = ? limit 1''', [user_id])
-        db.execute('''insert into message (username, user_id, pub_date, text, whom_set, who_set values(?, ?, ?, ?, ?, ?))''', [data['username'], uuid.UUID(user_id), data['pub_date'], data['text'], whom_set, who_set])
-
-        print 'Your message was successfully recorded'
-    return jsonify(data)
-
 
 @app.route('/users/<user_id>/add_follow', methods = ['POST', 'GET', 'PUT', 'DELETE'])
 def add_follow(user_id):
