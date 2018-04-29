@@ -16,26 +16,20 @@ from datetime import datetime
 from flask import Flask, request, session, url_for, redirect, \
      render_template, abort, g, flash, _app_ctx_stack
 from werkzeug import check_password_hash, generate_password_hash
-from flask_cassandra import CassandraCluster
 
 
 SECRET_KEY = b'_5#y2L"F4Q8z\n\xec]/'
 
 # create our little application :)
 app = Flask('minitwit')
-cassandra = CassandraCluster();
-app.config['CASSANDRA_NODES'] = ['127.0.0.1']
-CASSANDRA_NODES = '127.0.0.1'
 app.config.from_object(__name__)
 app.config.from_envvar('MINITWIT_SETTINGS', silent=True)
 
 
 def format_datetime(timestamp):
     """Format a timestamp for display."""
-    return datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d @ %H:%M' )
+    return datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d @ %H:%M')
 
-def formate_timestamp(timestamp):
-    return datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
 def gravatar_url(email, size=80):
     """Return the gravatar image for the given email address."""
@@ -92,7 +86,6 @@ def user_timeline(username):
         url = 'http://localhost:8080/users/' + str(session['user_id']) + '/follow'
         r = requests.get(url, json=payload)
         followed = r.json() is not None
-        print followed
     payload = {'profile_user_id': profile_user['user_id']}
     url = 'http://localhost:8080/users/' + profile_user['username'] + '/messages'
     r = requests.get(url, json=payload)
@@ -106,7 +99,7 @@ def follow_user(username):
     whom_id = mt_api.get_user_id(username)
     if whom_id is None:
         abort(404)
-    payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': str(whom_id), 'email': session['email'], 'pub_date': int(time.time())}
+    payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': whom_id}
     url = 'http://localhost:8080/users/' + str(session['user_id']) + '/add_follow'
     r = requests.post(url, json=payload)
     flash('You are now following "%s"' % username)
@@ -121,7 +114,7 @@ def unfollow_user(username):
     whom_id = mt_api.get_user_id(username)
     if whom_id is None:
         abort(404)
-    payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': str(whom_id), 'email': session['email'], 'pub_date': int(time.time())}
+    payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'whom_id': whom_id}
     url = 'http://localhost:8080/users/' + str(session['user_id']) + '/unfollow'
     r = requests.delete(url, json=payload)
     flash('You are no longer following "%s"' % username)
@@ -134,7 +127,7 @@ def add_message():
     if 'user_id' not in session:
         abort(401)
     if request.form['text']:
-        payload = {'user_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time()), 'email': session['email']}
+        payload = {'author_id': session['user_id'], 'pw_hash': session['pw_hash'], 'username': session['username'], 'text': request.form['text'], 'pub_date': int(time.time())}
         url = 'http://localhost:8080/users/' + session['username'] + '/add_message'
         r = requests.post(url, json=payload)
         flash('Your message was recorded')
@@ -165,7 +158,6 @@ def login():
             session['user_id'] = user['user_id']
             session['pw_hash'] = user['pw_hash']
             session['username'] = user['username']
-            session['email'] = user['email']
             return redirect(url_for('timeline'))
     return render_template('login.html', error=error)
 

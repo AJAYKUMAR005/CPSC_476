@@ -183,9 +183,6 @@ def get_user_messages(username):
     if profile_user is None:
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     data = request.get_json()
-    get_credentials(data["username"])
-    if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
-        return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if request.method == 'GET':
         messages = query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
         [profile_user['user_id'], PER_PAGE])
