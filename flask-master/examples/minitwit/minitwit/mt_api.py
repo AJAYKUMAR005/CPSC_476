@@ -115,23 +115,50 @@ def initdb_command():
     print('Initialized the database.')
 
 
-def query_db(query, args=(), one=False):
+# def query_db(query, args=(), one=False):
+#     """Queries the database and returns a list of dictionaries."""
+#     cur = get_db().execute(query, args)
+#     rv = cur.fetchall()
+#     return (rv[0] if rv else None) if one else rv
+
+
+def query_db(server_id, query, args=(), one=False):
     """Queries the database and returns a list of dictionaries."""
-    cur = get_db().execute(query, args)
+    cur = get_db(server_id).execute(query, args)
     rv = cur.fetchall()
     return (rv[0] if rv else None) if one else rv
 
 
+# def get_user_id(username):
+#     """Convenience method to look up the id for a username."""
+#     rv = query_db('select user_id from user where username = ?',
+#                   [username], one=True)
+#     return rv[0] if rv else None
+
+
 def get_user_id(username):
     """Convenience method to look up the id for a username."""
-    rv = query_db('select user_id from user where username = ?',
+    rv = query_db(0, 'select user_id from user where username = ?',
                   [username], one=True)
-    return rv[0] if rv else None
+    if rv:
+        return rv[0]
+
+    rv = query_db(1, 'select user_id from user where username = ?',
+                  [username], one=True)
+    if rv:
+        return rv[0]
+
+    rv = query_db(2, 'select user_id from user where username = ?',
+                  [username], one=True)
+    if rv:
+        return rv[0]
+    return None
 
 
 def get_username(user_id):
     '''return username of an user_id'''
-    cur = query_db('select username from user where user_id = ?', [user_id], one = True)
+    server_id = get_server_id(user_id)
+    cur = query_db(server_id, 'select username from user where user_id = ?', [user_id], one = True)
     return cur[0] if cur else None
 
 
@@ -141,15 +168,18 @@ def get_server_id(user_id):
 
 
 def get_credentials(username):
-    user_name = query_db('''select username from user where user.username = ?''', [username], one=True)
-    pw_hash = query_db('''select pw_hash from user where user.username = ?''', [username], one=True)
+    user_id = get_user_id(username)
+    server_id = get_server_id(user_id)
+    user_name = query_db(server_id, '''select username from user where user.username = ?''', [username], one=True)
+    pw_hash = query_db(server_id, '''select pw_hash from user where user.username = ?''', [username], one=True)
     app.config['BASIC_AUTH_USERNAME'] = user_name[0]
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
 
 
 def get_credentials_by_user_id(user_id):
-    user_name = query_db('''select username from user where user.user_id = ?''', [user_id], one=True)
-    pw_hash = query_db('''select pw_hash from user where user.user_id = ?''', [user_id], one=True)
+    server_id = get_server_id(user_id)
+    user_name = query_db(server_id, '''select username from user where user.user_id = ?''', [user_id], one=True)
+    pw_hash = query_db(server_id, '''select pw_hash from user where user.user_id = ?''', [user_id], one=True)
     app.config['BASIC_AUTH_USERNAME'] = user_name[0]
     app.config['BASIC_AUTH_PASSWORD'] = pw_hash[0]
 
@@ -198,17 +228,18 @@ def user_info(id_or_name):
     """Gets user's information"""
     data = request.get_json()
     if 'username' in data:
+        user_id = get_user_id(data['username'])
+        server_id = get_server_id(user_id)
         if request.method == 'GET':
-            user = query_db('''select * from user where user.username = ?''', [data['username']], one=True)
-            print user
-            # user = map(dict, user)
+            user = query_db(server_id, '''select * from user where user.username = ?''', [data['username']], one=True)
             if user:
                 user = dict(user)
                 return jsonify(user)
             return jsonify(user)
     if 'user_id' in data:
+        server_id = get_server_id(user_id)
         if request.method == 'GET':
-            user = query_db('''select * from user where user_id = ?''', [data['user_id']], one=True)
+            user = query_db(server_id, '''select * from user where user_id = ?''', [data['user_id']], one=True)
             if user:
                 user = dict(user)
                 return jsonify(user)
@@ -226,7 +257,8 @@ def insert_message(username):
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
         if data:
-            db = get_db()
+            server_id = get_server_id(user_id)
+            db = get_db(server_id)
             db.execute('''insert into message (author_id, text, pub_date)
             values (?, ?, ?)''', [user_id, data["text"], int(time.time())])
             db.commit()
@@ -238,12 +270,14 @@ def insert_message(username):
 @app.route('/users/<username>/messages', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def get_user_messages(username):
     """Displays a user's tweets"""
-    profile_user = query_db('select * from user where username = ?',[username], one=True)
+    user_id = get_user_id(username)
+    server_id = get_server_id(user_id)
+    profile_user = query_db(server_id, 'select * from user where username = ?',[username], one=True)
     if profile_user is None:
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     data = request.get_json()
     if request.method == 'GET':
-        messages = query_db('''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
+        messages = query_db(server_id, '''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
         [profile_user['user_id'], PER_PAGE])
         messages = map(dict, messages)
         return jsonify(messages)
@@ -259,7 +293,9 @@ def user_follow(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    messages = query_db('''
+    user_id = get_user_id(username)
+    server_id = get_server_id(user_id)
+    messages = query_db(server_id, '''
                         select 1 from follower
                         where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
     print messages
@@ -282,11 +318,9 @@ def add_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        '''Check duplicate'''
-        cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
-        if cur[0] > 0:
-            return make_error(422, "Unprocessable Entity", "Data duplicated")
-        db = get_db()
+        user_id = get_user_id(username)
+        server_id = get_server_id(user_id)
+        db = get_db(server_id)
         db.execute('''insert into follower (who_id, whom_id)
             values (?, ?)''',
             [user_id, data["whom_id"]])
@@ -308,11 +342,9 @@ def remove_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        '''Check who_id and whom_id existing'''
-        cur = query_db('select count(*) from follower where who_id = ? and whom_id = ?', [user_id, data["whom_id"]], one=True)
-        if cur[0] == 0:
-            return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
-        db = get_db()
+        user_id = get_user_id(username)
+        server_id = get_server_id(user_id)
+        db = get_db(server_id)
         db.execute('''delete from follower
         where who_id = ? and whom_id = ?''',
          [user_id, data["whom_id"]])
@@ -332,10 +364,11 @@ def Sign_up():
     data = request.get_json()
     print data
     if data:
-        db = get_db()
-        db.execute('''insert into user (username, email, pw_hash)
-            values (?, ?, ?)''',
-            [data["username"], data["email"], data["pw_hash"]])
+        user_id = uuid.uuid4()
+        server_id = get_server_id(user_id)
+        db = get_db(server_id)
+        db.execute('''insert into user values (?, ?, ?, ?)''',
+            [user_id, data["username"], data["email"], data["pw_hash"]])
         db.commit()
         print 'You were successfully registered'
     return jsonify(data)
