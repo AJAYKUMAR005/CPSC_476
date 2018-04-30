@@ -33,8 +33,8 @@ app.config['BASIC_AUTH_PASSWORD'] = 'admin123'
 basic_auth = BasicAuth(app)
 
 #create GUID
-sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
-sqlite3.register_adapter(uuid.UUID, lambda u: buffer(u.bytes_le))
+# sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
+# sqlite3.register_adapter(uuid.UUID, lambda u: buffer(u.bytes_le))
 
 # def get_db():
 #     """Opens a new database connection if there is none yet for the
@@ -101,6 +101,8 @@ def close_database(exception):
 
 def init_db():
     """Initializes the database."""
+    sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
+    sqlite3.register_adapter(uuid.UUID, lambda u: buffer(u.bytes_le))
     for i in range(0,3):
         db = get_db(i)
         with app.open_resource('schema.sql', mode='r') as f:
@@ -164,7 +166,7 @@ def get_username(user_id):
 
 def get_server_id(user_id):
     '''return sharding for server'''
-    return int(int(user_id) % 3)
+    return int(int(uuid.UUID(user_id).int) % 3)
 
 
 def get_credentials(username):
@@ -229,6 +231,7 @@ def user_info(id_or_name):
     data = request.get_json()
     if 'username' in data:
         user_id = get_user_id(data['username'])
+        print type(user_id)
         server_id = get_server_id(user_id)
         if request.method == 'GET':
             user = query_db(server_id, '''select * from user where user.username = ?''', [data['username']], one=True)
@@ -237,7 +240,7 @@ def user_info(id_or_name):
                 return jsonify(user)
             return jsonify(user)
     if 'user_id' in data:
-        server_id = get_server_id(user_id)
+        server_id = get_server_id(data['user_id'])
         if request.method == 'GET':
             user = query_db(server_id, '''select * from user where user_id = ?''', [data['user_id']], one=True)
             if user:
@@ -277,7 +280,7 @@ def get_user_messages(username):
         return make_error(404, 'Not Found', 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.')
     data = request.get_json()
     if request.method == 'GET':
-        messages = query_db(server_id, '''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
+        messages = query_db(server_id,'''select message.*, user.* from message, user where user.user_id = message.author_id and user.user_id = ? order by message.pub_date desc limit ?''',
         [profile_user['user_id'], PER_PAGE])
         messages = map(dict, messages)
         return jsonify(messages)
@@ -376,7 +379,7 @@ def Sign_up():
 
 @app.route('/users', methods = ['POST', 'GET', 'PUT', 'DELETE'])
 def user_time_line():
-    '''get user timeline or if no user is logged in it will get the public timeline instead.
+    '''get user timeline
     '''
     if not request.json:
         return make_error(400, "Bad Request", "The browser (or proxy) sent a request that this server could not understand.")
@@ -387,14 +390,36 @@ def user_time_line():
         get_credentials_by_user_id(data["user_id"])
         if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
             return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    user = query_db('''select message.*, user.* from message, user
-    where message.author_id = user.user_id and (
-        user.user_id = ? or
-        user.user_id in (select whom_id from follower
-                                where who_id = ?))
-    order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
+    server_id = get_server_id(data['user_id'])
+    user = query_db(server_id, '''select message.*, user.* from message, user where message.author_id = user.user_id and user.user_id = ? order by message.pub_date desc limit ?''', [data['user_id'], PER_PAGE])
+
+    # print user
+    # user.extend(user)
+
+    whom_id_set = query_db(server_id, '''select whom_id from follower where who_id = ?''', [data['user_id']])
+
+    for i in whom_id_set:
+        print i['whom_id']
+        server_id = get_server_id(i['whom_id'])
+        print server_id
+        follower = query_db(server_id, '''select message.*, user.* from message, user where message.author_id = user.user_id and user.user_id = ? order by message.pub_date desc limit ?''', [i['whom_id'], PER_PAGE])
+        # follower = map(dict, follower)
+        user.extend(follower)
+
+
     user = map(dict, user)
     return jsonify(user)
+
+
+    # user = query_db('''select message.*, user.* from message, user
+    # where message.author_id = user.user_id and (
+    #     user.user_id = ? or
+    #     user.user_id in (select whom_id from follower
+    #                             where who_id = ?))
+    # order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
+    # user = map(dict, user)
+    # return jsonify(user)
+
 
 
 @app.route('/timeline', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -402,9 +427,18 @@ def public_time_line():
     '''display latest messages of all users.'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-    messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
-    messages = map(dict, messages)
+    # messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+    # messages = map(dict, messages)
+    # return jsonify(messages)
+    messages_server0 = query_db(0, '''select message.*, user.* from message, user where author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+    messages_server1 = query_db(1, '''select message.*, user.* from message, user where author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+    messages_server2 = query_db(2, '''select message.*, user.* from message, user where author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
+
+    messages_server0.extend(messages_server1)
+    messages_server0.extend(messages_server2)
+    messages = map(dict, messages_server0)
     return jsonify(messages)
+
 
 
 if __name__ == '__main__':
