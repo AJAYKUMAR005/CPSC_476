@@ -383,7 +383,7 @@ def Sign_up():
         server_id = get_server_id(str(user_id))
         db = get_db(server_id)
         db.execute('''insert into user values (?, ?, ?, ?)''',
-            [user_id, data["username"], data["email"], data["pw_hash"]])
+            [str(user_id), data["username"], data["email"], data["pw_hash"]])
         db.commit()
         print 'You were successfully registered'
     return jsonify(data)
