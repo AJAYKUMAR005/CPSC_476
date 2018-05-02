@@ -166,7 +166,14 @@ def get_username(user_id):
 
 def get_server_id(user_id):
     '''return sharding for server'''
-    return int(int(uuid.UUID(user_id).int) % 3)
+    # return int(int(uuid.UUID(user_id)) % 3)
+    # print user_id
+    # print repr(user_id)
+    # print uuid.UUID(user_id)
+    # print uuid.UUID(user_id).int
+    # print uuid.UUID(user_id).int % 3
+    # print type(user_id)
+    return (uuid.UUID(user_id).int) % 3
 
 
 def get_credentials(username):
@@ -230,15 +237,23 @@ def user_info(id_or_name):
     """Gets user's information"""
     data = request.get_json()
     if 'username' in data:
+        # import pprint
+        # pprint.pprint(data)
         user_id = get_user_id(data['username'])
-        print type(user_id)
-        server_id = get_server_id(user_id)
-        if request.method == 'GET':
-            user = query_db(server_id, '''select * from user where user.username = ?''', [data['username']], one=True)
-            if user:
-                user = dict(user)
+        if user_id:
+            print data['username']
+            print user_id
+            print repr(user_id)
+            print type(user_id)
+            server_id = get_server_id(str(user_id))
+            if request.method == 'GET':
+                user = query_db(server_id, '''select * from user where user.username = ?''', [data['username']], one=True)
+                if user:
+                    user = dict(user)
+                    return jsonify(user)
                 return jsonify(user)
-            return jsonify(user)
+        else:
+            return jsonify(None)
     if 'user_id' in data:
         server_id = get_server_id(data['user_id'])
         if request.method == 'GET':
@@ -296,8 +311,7 @@ def user_follow(user_id):
     get_credentials_by_user_id(user_id)
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
-    user_id = get_user_id(username)
-    server_id = get_server_id(user_id)
+    server_id = get_server_id(str(user_id))
     messages = query_db(server_id, '''
                         select 1 from follower
                         where follower.who_id = ? and follower.whom_id = ?''', [data['user_id'], data['profile_user_id']], one=True)
@@ -321,7 +335,6 @@ def add_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        user_id = get_user_id(username)
         server_id = get_server_id(user_id)
         db = get_db(server_id)
         db.execute('''insert into follower (who_id, whom_id)
@@ -345,7 +358,6 @@ def remove_follow(user_id):
     if not basic_auth.check_credentials(data["username"], data["pw_hash"]):
         return make_error(401, 'Unauthorized', 'Correct username and password are required.')
     if data:
-        user_id = get_user_id(username)
         server_id = get_server_id(user_id)
         db = get_db(server_id)
         db.execute('''delete from follower
@@ -368,7 +380,7 @@ def Sign_up():
     print data
     if data:
         user_id = uuid.uuid4()
-        server_id = get_server_id(user_id)
+        server_id = get_server_id(str(user_id))
         db = get_db(server_id)
         db.execute('''insert into user values (?, ?, ?, ?)''',
             [user_id, data["username"], data["email"], data["pw_hash"]])
