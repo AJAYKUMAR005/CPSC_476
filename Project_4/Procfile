@@ -1,0 +1,2 @@
+mt_api: FLASK_APP=mt_api.py flask run -p $PORT
+minitwit: FLASK_APP=minitwit.py flask run -p $PORT
