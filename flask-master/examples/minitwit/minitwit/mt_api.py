@@ -32,20 +32,6 @@ app.config['BASIC_AUTH_PASSWORD'] = 'admin123'
 
 basic_auth = BasicAuth(app)
 
-#create GUID
-# sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
-# sqlite3.register_adapter(uuid.UUID, lambda u: buffer(u.bytes_le))
-
-# def get_db():
-#     """Opens a new database connection if there is none yet for the
-#     current application context.
-#     """
-#     top = _app_ctx_stack.top
-#     if not hasattr(top, 'sqlite_db'):
-#         top.sqlite_db = sqlite3.connect(app.config['DATABASE'])
-#         top.sqlite_db.row_factory = sqlite3.Row
-#     return top.sqlite_db
-
 def get_db(server_id):
     """Opens a new database connection if there is none yet for the
     current application context.
@@ -71,14 +57,6 @@ def get_db(server_id):
         return top.sqlite_db2
 
 
-# @app.teardown_appcontext
-# def close_database(exception):
-#     """Closes the database again at the end of the request."""
-#     top = _app_ctx_stack.top
-#     if hasattr(top, 'sqlite_db'):
-#         top.sqlite_db.close()
-
-
 @app.teardown_appcontext
 def close_database(exception):
     """Closes the database again at the end of the request."""
@@ -89,14 +67,6 @@ def close_database(exception):
         top.sqlite_db1.close()
     if hasattr(top, 'sqlite_db2'):
         top.sqlite_db2.close()
-
-
-# def init_db():
-#     """Initializes the database."""
-#     db = get_db()
-#     with app.open_resource('schema.sql', mode='r') as f:
-#         db.cursor().executescript(f.read())
-#     db.commit()
 
 
 def init_db():
@@ -117,25 +87,11 @@ def initdb_command():
     print('Initialized the database.')
 
 
-# def query_db(query, args=(), one=False):
-#     """Queries the database and returns a list of dictionaries."""
-#     cur = get_db().execute(query, args)
-#     rv = cur.fetchall()
-#     return (rv[0] if rv else None) if one else rv
-
-
 def query_db(server_id, query, args=(), one=False):
     """Queries the database and returns a list of dictionaries."""
     cur = get_db(server_id).execute(query, args)
     rv = cur.fetchall()
     return (rv[0] if rv else None) if one else rv
-
-
-# def get_user_id(username):
-#     """Convenience method to look up the id for a username."""
-#     rv = query_db('select user_id from user where username = ?',
-#                   [username], one=True)
-#     return rv[0] if rv else None
 
 
 def get_user_id(username):
@@ -166,13 +122,6 @@ def get_username(user_id):
 
 def get_server_id(user_id):
     '''return sharding for server'''
-    # return int(int(uuid.UUID(user_id)) % 3)
-    # print user_id
-    # print repr(user_id)
-    # print uuid.UUID(user_id)
-    # print uuid.UUID(user_id).int
-    # print uuid.UUID(user_id).int % 3
-    # print type(user_id)
     return (uuid.UUID(user_id).int) % 3
 
 
@@ -237,8 +186,6 @@ def user_info(id_or_name):
     """Gets user's information"""
     data = request.get_json()
     if 'username' in data:
-        # import pprint
-        # pprint.pprint(data)
         user_id = get_user_id(data['username'])
         if user_id:
             print data['username']
@@ -405,9 +352,6 @@ def user_time_line():
     server_id = get_server_id(data['user_id'])
     user = query_db(server_id, '''select message.*, user.* from message, user where message.author_id = user.user_id and user.user_id = ? order by message.pub_date desc limit ?''', [data['user_id'], PER_PAGE])
 
-    # print user
-    # user.extend(user)
-
     whom_id_set = query_db(server_id, '''select whom_id from follower where who_id = ?''', [data['user_id']])
 
     for i in whom_id_set:
@@ -415,23 +359,10 @@ def user_time_line():
         server_id = get_server_id(i['whom_id'])
         print server_id
         follower = query_db(server_id, '''select message.*, user.* from message, user where message.author_id = user.user_id and user.user_id = ? order by message.pub_date desc limit ?''', [i['whom_id'], PER_PAGE])
-        # follower = map(dict, follower)
         user.extend(follower)
-
 
     user = map(dict, user)
     return jsonify(user)
-
-
-    # user = query_db('''select message.*, user.* from message, user
-    # where message.author_id = user.user_id and (
-    #     user.user_id = ? or
-    #     user.user_id in (select whom_id from follower
-    #                             where who_id = ?))
-    # order by message.pub_date desc limit ?''', [data['user_id'], data['user_id'], PER_PAGE])
-    # user = map(dict, user)
-    # return jsonify(user)
-
 
 
 @app.route('/timeline', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -439,9 +370,6 @@ def public_time_line():
     '''display latest messages of all users.'''
     if request.method != 'GET':
         return make_error(405, 'Method Not Allowed', 'The method is not allowed for the requested URL.')
-    # messages=query_db('''select message.*, user.* from message, user where message.author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
-    # messages = map(dict, messages)
-    # return jsonify(messages)
     messages_server0 = query_db(0, '''select message.*, user.* from message, user where author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
     messages_server1 = query_db(1, '''select message.*, user.* from message, user where author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
     messages_server2 = query_db(2, '''select message.*, user.* from message, user where author_id = user.user_id order by message.pub_date desc limit ?''', [PER_PAGE])
@@ -450,7 +378,6 @@ def public_time_line():
     messages_server0.extend(messages_server2)
     messages = map(dict, messages_server0)
     return jsonify(messages)
-
 
 
 if __name__ == '__main__':
