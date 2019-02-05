@@ -24,7 +24,7 @@
 - [Project 1 Instruction](https://github.com/tngo0508/CPSC_476/blob/master/Project_1/CPSC%20476%20-%20Spring%202018%20-%20Project%201.pdf)
 
 # Project 2
-- In this project, I refactor MiniTwit to use the Web Service API that you created in Project 1, then run multiple instances of both the front- and back-end servers behind a load balancer. In order to do this, I remove all references to sqlite3 and all database queries from minitwit.py, replacing them with requests to mt_api.py via the [Requests](http://docs.python-requests.org/en/master/) library.
+- In this project, I refactor MiniTwit to use the Web Service API that I created in Project 1, then run multiple instances of both the front- and back-end servers behind a load balancer. In order to do this, I remove all references to sqlite3 and all database queries from minitwit.py, replacing them with requests to mt_api.py via the [Requests](http://docs.python-requests.org/en/master/) library.
 - To simulate running MiniTwit in production, I run three instances of minitwit.py and three instances of mt_api.py. To do this, I create a [Procfile](http://blog.daviddollar.org/2011/05/06/introducing-foreman.html) and use the [foreman](http://ddollar.github.io/foreman/) command-line utility.
 - To set up the load balancer, I use [NGINX](https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-ubuntu-16-04)
 - [Project 2 Instruction](https://github.com/tngo0508/CPSC_476/blob/master/Project_2/CPSC%20476%20-%20Spring%202018%20-%20Project%202.pdf)
